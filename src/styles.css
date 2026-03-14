@@ -48,6 +48,31 @@ pre {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   min-height: 100vh;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.08), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(251, 146, 60, 0.1), transparent 28%),
+    #f6f8fb;
+}
+
+.app-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 28px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
 
 .app-sidebar {
@@ -99,6 +124,50 @@ pre {
   transform: translateX(4px);
 }
 
+.topbar-left {
+  max-width: 640px;
+}
+
+.topbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 6px;
+}
+
+.topbar-title {
+  margin: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.topbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.pill.subtle {
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+}
+
 .role-panel {
   padding: 18px;
   border-radius: 20px;
@@ -107,6 +176,15 @@ pre {
 
 .app-main {
   padding: 28px;
+}
+
+.page-container {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .page-shell {
@@ -197,6 +275,11 @@ pre {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.detail-grid.weighted-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  align-items: start;
+}
+
 .editor-column {
   display: grid;
   gap: 20px;
@@ -207,6 +290,16 @@ pre {
 .panel h4,
 .page-header h2 {
   margin: 0 0 6px;
+}
+
+.primary-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.88));
+  border-color: rgba(249, 115, 22, 0.35);
+  box-shadow: 0 20px 50px rgba(249, 115, 22, 0.14), 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.secondary-panel {
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .field {
@@ -229,6 +322,46 @@ pre {
   letter-spacing: 0.08em;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.form-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.section-label {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.field-row .field + .field {
+  margin-top: 0;
+}
+
+.form-actions {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form-actions .muted-copy {
+  margin: 0;
 }
 
 .eyebrow {
@@ -456,6 +589,22 @@ textarea {
   .app-shell,
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .detail-grid.weighted-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-topbar {
+    position: static;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
   }
 
   .app-sidebar {

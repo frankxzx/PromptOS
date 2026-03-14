@@ -58,82 +58,96 @@ export function SnippetLibraryPage() {
       </header>
 
       {showCreate ? (
-        <section className="panel">
+        <section className="panel primary-panel">
           <div className="panel-header-row">
             <div>
+              <p className="eyebrow">Snippet creation</p>
               <h3>Create snippet</h3>
-              <p className="muted-copy">Creates the snippet and its first version.</p>
+              <p className="muted-copy">Capture metadata, then author the first version.</p>
             </div>
+            <span className="pill subtle">Primary</span>
           </div>
           {createMessage ? <div className="banner success">{createMessage}</div> : null}
-          <div className="detail-grid">
-            <label className="field">
-              <span className="field-label">Name</span>
-              <input value={createName} onChange={(event) => setCreateName(event.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field-label">Type</span>
-              <select
-                value={createType}
-                onChange={(event) => setCreateType(event.target.value as SnippetType)}
-              >
-                <option value="role">Role</option>
-                <option value="persona">Persona</option>
-                <option value="instruction">Instruction</option>
-                <option value="format">Format</option>
-                <option value="safety">Safety</option>
-                <option value="tone">Tone</option>
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-label">Status</span>
-              <select
-                value={createStatus}
-                onChange={(event) => setCreateStatus(event.target.value as SnippetStatus)}
-              >
-                <option value="active">Active</option>
-                <option value="deprecated">Deprecated</option>
-              </select>
-            </label>
+          <div className="form-section">
+            <p className="section-label">Snippet metadata</p>
+            <div className="field-row">
+              <label className="field">
+                <span className="field-label">Name</span>
+                <input value={createName} onChange={(event) => setCreateName(event.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field-label">Type</span>
+                <select
+                  value={createType}
+                  onChange={(event) => setCreateType(event.target.value as SnippetType)}
+                >
+                  <option value="role">Role</option>
+                  <option value="persona">Persona</option>
+                  <option value="instruction">Instruction</option>
+                  <option value="format">Format</option>
+                  <option value="safety">Safety</option>
+                  <option value="tone">Tone</option>
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Status</span>
+                <select
+                  value={createStatus}
+                  onChange={(event) => setCreateStatus(event.target.value as SnippetStatus)}
+                >
+                  <option value="active">Active</option>
+                  <option value="deprecated">Deprecated</option>
+                </select>
+              </label>
+            </div>
             <label className="field">
               <span className="field-label">Description</span>
               <input
                 value={createDescription}
                 onChange={(event) => setCreateDescription(event.target.value)}
+                placeholder="What this snippet covers"
               />
             </label>
           </div>
-          <label className="field">
-            <span className="field-label">Initial content</span>
-            <textarea
-              rows={8}
-              value={createContent}
-              onChange={(event) => setCreateContent(event.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => {
-              const result = createSnippet({
-                name: createName,
-                type: createType,
-                status: createStatus,
-                description: createDescription,
-                content: createContent
-              });
-              if (!result.ok) {
-                setCreateMessage(result.message ?? "Unable to create snippet.");
-                return;
-              }
-              setCreateMessage("Snippet created.");
-              if (result.snippetId) {
-                navigate(`/snippets/${result.snippetId}`);
-              }
-            }}
-          >
-            Create snippet
-          </button>
+
+          <div className="form-section">
+            <p className="section-label">Initial content</p>
+            <label className="field">
+              <span className="field-label">Content</span>
+              <textarea
+                rows={8}
+                value={createContent}
+                onChange={(event) => setCreateContent(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="form-actions">
+            <p className="muted-copy">Creates the snippet and its first version.</p>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                const result = createSnippet({
+                  name: createName,
+                  type: createType,
+                  status: createStatus,
+                  description: createDescription,
+                  content: createContent
+                });
+                if (!result.ok) {
+                  setCreateMessage(result.message ?? "Unable to create snippet.");
+                  return;
+                }
+                setCreateMessage("Snippet created.");
+                if (result.snippetId) {
+                  navigate(`/snippets/${result.snippetId}`);
+                }
+              }}
+            >
+              Create snippet
+            </button>
+          </div>
         </section>
       ) : null}
 

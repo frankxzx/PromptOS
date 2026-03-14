@@ -321,59 +321,79 @@ export function ScenarioEditorPage() {
       <div className="editor-shell">
         <aside className="editor-column side">
           <section className="panel">
-            <h3>Scenario metadata</h3>
-            <label className="field">
-              <span className="field-label">Scenario name</span>
-              <input
-                value={activeScenario.name}
-                onChange={(event) => updateDraft({ ...activeScenario, name: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Description</span>
-              <textarea
-                rows={4}
-                value={activeScenario.description}
-                onChange={(event) =>
-                  updateDraft({ ...activeScenario, description: event.target.value })
-                }
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Pinned template version</span>
-              <select
-                value={activeScenario.templateVersion}
-                onChange={(event) => updateTemplateVersion(Number(event.target.value))}
-              >
-                {activeTemplate.versions
-                  .slice()
-                  .reverse()
-                  .map((version) => (
-                    <option key={version.version} value={version.version}>
-                      v{version.version}
-                    </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-label">Scenario language</span>
-              <select
-                value={activeScenario.language}
-                onChange={(event) =>
-                  updateDraft({
-                    ...activeScenario,
-                    language: event.target.value as LanguageCode
-                  })
-                }
-              >
-                {resolvedTemplate.supportedLanguages.map((language) => (
-                  <option key={language} value={language}>
-                    {LANGUAGE_LABELS[language]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="muted-copy">Template: {activeTemplate.name}</p>
+            <div className="panel-header-row">
+              <div>
+                <h3>Scenario metadata</h3>
+                <p className="muted-copy">
+                  Keep the basics clear, then pin to the right template version.
+                </p>
+              </div>
+              <span className="pill subtle">Primary</span>
+            </div>
+
+            <div className="form-section">
+              <p className="section-label">Scenario basics</p>
+              <label className="field">
+                <span className="field-label">Scenario name</span>
+                <input
+                  value={activeScenario.name}
+                  onChange={(event) =>
+                    updateDraft({ ...activeScenario, name: event.target.value })
+                  }
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Description</span>
+                <textarea
+                  rows={4}
+                  value={activeScenario.description}
+                  onChange={(event) =>
+                    updateDraft({ ...activeScenario, description: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="form-section">
+              <p className="section-label">Template binding</p>
+              <div className="field-row">
+                <label className="field">
+                  <span className="field-label">Pinned template version</span>
+                  <select
+                    value={activeScenario.templateVersion}
+                    onChange={(event) => updateTemplateVersion(Number(event.target.value))}
+                  >
+                    {activeTemplate.versions
+                      .slice()
+                      .reverse()
+                      .map((version) => (
+                        <option key={version.version} value={version.version}>
+                          v{version.version}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span className="field-label">Scenario language</span>
+                  <select
+                    value={activeScenario.language}
+                    onChange={(event) =>
+                      updateDraft({
+                        ...activeScenario,
+                        language: event.target.value as LanguageCode
+                      })
+                    }
+                  >
+                    {resolvedTemplate.supportedLanguages.map((language) => (
+                      <option key={language} value={language}>
+                        {LANGUAGE_LABELS[language]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <p className="muted-copy">Template: {activeTemplate.name}</p>
+            </div>
           </section>
 
           <section className="panel">

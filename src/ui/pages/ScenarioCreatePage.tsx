@@ -115,180 +115,218 @@ export function ScenarioCreatePage() {
         </div>
       </header>
 
-      <div className="detail-grid">
-        <section className="panel">
-          <h3>Scenario setup</h3>
-          <label className="field">
-            <span className="field-label">Scenario name</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Friday Night Host"
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Description</span>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Short description of this scenario"
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Template</span>
-            <select
-              value={selectedTemplate?.id ?? ""}
-              onChange={(event) => handleTemplateChange(event.target.value)}
-            >
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Template version</span>
-            <select
-              value={templateVersion}
-              onChange={(event) => setTemplateVersion(Number(event.target.value))}
-            >
-              {selectedTemplate?.versions
-                .slice()
-                .reverse()
-                .map((version) => (
-                  <option key={version.version} value={version.version}>
-                    v{version.version}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Scenario language</span>
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value as LanguageCode)}
-            >
-              {(resolvedTemplate?.supportedLanguages ?? ["en"]).map((item) => (
-                <option key={item} value={item}>
-                  {LANGUAGE_LABELS[item]}
-                </option>
-              ))}
-            </select>
-          </label>
+      <div className="detail-grid weighted-grid">
+        <section className="panel primary-panel">
           <div className="panel-header-row">
             <div>
-              <strong>Initial persona cards</strong>
+              <p className="eyebrow">Primary form</p>
+              <h3>Scenario setup</h3>
               <p className="muted-copy">
-                Optional. You can keep editing personas after the scenario is created.
+                Capture the essentials first, then pin to the right template version.
               </p>
             </div>
-            <button type="button" className="secondary-button" onClick={addPersona}>
-              Add persona
+            <span className="pill subtle">Step 1</span>
+          </div>
+
+          <div className="form-section">
+            <p className="section-label">Scenario basics</p>
+            <label className="field">
+              <span className="field-label">Scenario name</span>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Friday Night Host"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Description</span>
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Short description of this scenario"
+              />
+            </label>
+          </div>
+
+          <div className="form-section">
+            <p className="section-label">Template binding</p>
+            <div className="field-row">
+              <label className="field">
+                <span className="field-label">Template</span>
+                <select
+                  value={selectedTemplate?.id ?? ""}
+                  onChange={(event) => handleTemplateChange(event.target.value)}
+                >
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Template version</span>
+                <select
+                  value={templateVersion}
+                  onChange={(event) => setTemplateVersion(Number(event.target.value))}
+                >
+                  {selectedTemplate?.versions
+                    .slice()
+                    .reverse()
+                    .map((version) => (
+                      <option key={version.version} value={version.version}>
+                        v{version.version}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Scenario language</span>
+                <select
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value as LanguageCode)}
+                >
+                  {(resolvedTemplate?.supportedLanguages ?? ["en"]).map((item) => (
+                    <option key={item} value={item}>
+                      {LANGUAGE_LABELS[item]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="muted-copy">
+              Switching templates resets the pinned version and drives the upcoming fields.
+            </p>
+          </div>
+
+          <div className="form-section">
+            <div className="panel-header-row">
+              <div>
+                <p className="section-label">Initial persona cards</p>
+                <p className="muted-copy">
+                  Optional. You can keep editing personas after the scenario is created.
+                </p>
+              </div>
+              <button type="button" className="secondary-button" onClick={addPersona}>
+                Add persona
+              </button>
+            </div>
+            {personaBindings.length === 0 ? (
+              <p className="muted-copy">
+                No persona cards selected yet. Add one if this template uses{" "}
+                <code>{"{{personas}}"}</code>.
+              </p>
+            ) : (
+              <div className="stack-list">
+                {personaBindings.map((binding, index) => {
+                  const personaSnippets = snippets.filter((item) => item.type === "persona");
+                  const selectedSnippet = personaSnippets.find(
+                    (snippet) => snippet.id === binding.snippetId
+                  );
+
+                  return (
+                    <article key={binding.id} className="nested-card">
+                      <div className="panel-header-row">
+                        <strong>Persona {index + 1}</strong>
+                        <div className="inline-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => movePersona(index, -1)}
+                          >
+                            Up
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => movePersona(index, 1)}
+                          >
+                            Down
+                          </button>
+                        </div>
+                      </div>
+                      <label className="field">
+                        <span className="field-label">Persona snippet</span>
+                        <select
+                          value={binding.snippetId ?? ""}
+                          onChange={(event) => updatePersona(index, event.target.value)}
+                        >
+                          <option value="">Select persona</option>
+                          {personaSnippets.map((snippet) => (
+                            <option key={snippet.id} value={snippet.id}>
+                              {snippet.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span className="field-label">Pinned version</span>
+                        <select
+                          value={binding.pinnedVersion ?? selectedSnippet?.currentVersion ?? ""}
+                          onChange={(event) =>
+                            updatePersonaVersion(index, Number(event.target.value))
+                          }
+                          disabled={!selectedSnippet}
+                        >
+                          {selectedSnippet?.versions.map((version) => (
+                            <option key={version.version} value={version.version}>
+                              v{version.version}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => updatePersona(index, "")}
+                      >
+                        Remove persona
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions">
+            <p className="muted-copy">Create the draft to reveal template-driven fields next.</p>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                if (!selectedTemplate) {
+                  return;
+                }
+                const scenarioId = createScenario({
+                  templateId: selectedTemplate.id,
+                  templateVersion,
+                  name,
+                  description,
+                  language,
+                  personaBindings
+                });
+                if (scenarioId) {
+                  navigate(`/scenarios/${scenarioId}`);
+                }
+              }}
+            >
+              Create scenario draft
             </button>
           </div>
-          {personaBindings.length === 0 ? (
-            <p className="muted-copy">
-              No persona cards selected yet. Add one if this template uses{" "}
-              <code>{"{{personas}}"}</code>.
-            </p>
-          ) : (
-            <div className="stack-list">
-              {personaBindings.map((binding, index) => {
-                const personaSnippets = snippets.filter((item) => item.type === "persona");
-                const selectedSnippet = personaSnippets.find(
-                  (snippet) => snippet.id === binding.snippetId
-                );
-
-                return (
-                  <article key={binding.id} className="nested-card">
-                    <div className="panel-header-row">
-                      <strong>Persona {index + 1}</strong>
-                      <div className="inline-actions">
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => movePersona(index, -1)}
-                        >
-                          Up
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => movePersona(index, 1)}
-                        >
-                          Down
-                        </button>
-                      </div>
-                    </div>
-                    <label className="field">
-                      <span className="field-label">Persona snippet</span>
-                      <select
-                        value={binding.snippetId ?? ""}
-                        onChange={(event) => updatePersona(index, event.target.value)}
-                      >
-                        <option value="">Select persona</option>
-                        {personaSnippets.map((snippet) => (
-                          <option key={snippet.id} value={snippet.id}>
-                            {snippet.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span className="field-label">Pinned version</span>
-                      <select
-                        value={binding.pinnedVersion ?? selectedSnippet?.currentVersion ?? ""}
-                        onChange={(event) => updatePersonaVersion(index, Number(event.target.value))}
-                        disabled={!selectedSnippet}
-                      >
-                        {selectedSnippet?.versions.map((version) => (
-                          <option key={version.version} value={version.version}>
-                            v{version.version}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => updatePersona(index, "")}
-                    >
-                      Remove persona
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => {
-              if (!selectedTemplate) {
-                return;
-              }
-              const scenarioId = createScenario({
-                templateId: selectedTemplate.id,
-                templateVersion,
-                name,
-                description,
-                language,
-                personaBindings
-              });
-              if (scenarioId) {
-                navigate(`/scenarios/${scenarioId}`);
-              }
-            }}
-          >
-            Create scenario draft
-          </button>
         </section>
 
-        <section className="panel">
-          <h3>Template version summary</h3>
+        <section className="panel secondary-panel sticky">
+          <div className="panel-header-row">
+            <div>
+              <p className="eyebrow">Step 2</p>
+              <h3>Template version summary</h3>
+              <p className="muted-copy">
+                Preview the fields and slots that will appear after creating the draft.
+              </p>
+            </div>
+          </div>
           {resolvedTemplate ? (
             <div className="stack-list">
               <article className="nested-card">
