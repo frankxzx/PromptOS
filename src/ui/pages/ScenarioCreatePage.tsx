@@ -42,85 +42,119 @@ export function ScenarioCreatePage() {
         </div>
       </header>
 
-      <div className="detail-grid">
-        <section className="panel">
-          <h3>Scenario setup</h3>
-          <label className="field">
-            <span className="field-label">Scenario name</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Friday Night Host"
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Description</span>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Short description of this scenario"
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Template</span>
-            <select
-              value={selectedTemplate?.id ?? ""}
-              onChange={(event) => {
-                const nextTemplate =
-                  templates.find((template) => template.id === event.target.value) ?? templates[0];
-                setTemplateId(nextTemplate?.id ?? "");
-                setTemplateVersion(nextTemplate?.version ?? 1);
+      <div className="detail-grid weighted-grid">
+        <section className="panel primary-panel">
+          <div className="panel-header-row">
+            <div>
+              <p className="eyebrow">Primary form</p>
+              <h3>Scenario setup</h3>
+              <p className="muted-copy">
+                Capture the essentials first, then pin to the right template version.
+              </p>
+            </div>
+            <span className="pill subtle">Step 1</span>
+          </div>
+
+          <div className="form-section">
+            <p className="section-label">Scenario basics</p>
+            <label className="field">
+              <span className="field-label">Scenario name</span>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Friday Night Host"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Description</span>
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Short description of this scenario"
+              />
+            </label>
+          </div>
+
+          <div className="form-section">
+            <p className="section-label">Template binding</p>
+            <div className="field-row">
+              <label className="field">
+                <span className="field-label">Template</span>
+                <select
+                  value={selectedTemplate?.id ?? ""}
+                  onChange={(event) => {
+                    const nextTemplate =
+                      templates.find((template) => template.id === event.target.value) ??
+                      templates[0];
+                    setTemplateId(nextTemplate?.id ?? "");
+                    setTemplateVersion(nextTemplate?.version ?? 1);
+                  }}
+                >
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Template version</span>
+                <select
+                  value={templateVersion}
+                  onChange={(event) => setTemplateVersion(Number(event.target.value))}
+                >
+                  {selectedTemplate?.versions
+                    .slice()
+                    .reverse()
+                    .map((version) => (
+                      <option key={version.version} value={version.version}>
+                        v{version.version}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
+            <p className="muted-copy">
+              Switching templates resets the pinned version and drives the upcoming fields.
+            </p>
+          </div>
+
+          <div className="form-actions">
+            <p className="muted-copy">Create the draft to reveal template-driven fields next.</p>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                if (!selectedTemplate) {
+                  return;
+                }
+                const scenarioId = createScenario({
+                  templateId: selectedTemplate.id,
+                  templateVersion,
+                  name,
+                  description
+                });
+                if (scenarioId) {
+                  navigate(`/scenarios/${scenarioId}`);
+                }
               }}
             >
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Template version</span>
-            <select
-              value={templateVersion}
-              onChange={(event) => setTemplateVersion(Number(event.target.value))}
-            >
-              {selectedTemplate?.versions
-                .slice()
-                .reverse()
-                .map((version) => (
-                  <option key={version.version} value={version.version}>
-                    v{version.version}
-                  </option>
-                ))}
-            </select>
-          </label>
-
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => {
-              if (!selectedTemplate) {
-                return;
-              }
-              const scenarioId = createScenario({
-                templateId: selectedTemplate.id,
-                templateVersion,
-                name,
-                description
-              });
-              if (scenarioId) {
-                navigate(`/scenarios/${scenarioId}`);
-              }
-            }}
-          >
-            Create scenario draft
-          </button>
+              Create scenario draft
+            </button>
+          </div>
         </section>
 
-        <section className="panel">
-          <h3>Template version summary</h3>
+        <section className="panel secondary-panel sticky">
+          <div className="panel-header-row">
+            <div>
+              <p className="eyebrow">Step 2</p>
+              <h3>Template version summary</h3>
+              <p className="muted-copy">
+                Preview the fields and slots that will appear after creating the draft.
+              </p>
+            </div>
+          </div>
           {resolvedTemplate ? (
             <div className="stack-list">
               <article className="nested-card">
