@@ -577,41 +577,54 @@ export function TemplateBuilderPage() {
       <div className="editor-shell">
         <aside className="editor-column side">
           <section className="panel">
-            <h3>Template metadata</h3>
-            <label className="field">
-              <span className="field-label">Template name</span>
-              <input
-                value={activeTemplate.name}
-                onChange={(event) => updateDraft({ ...activeTemplate, name: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Business domain</span>
-              <input
-                value={activeTemplate.businessDomain}
-                onChange={(event) =>
-                  updateDraft({ ...activeTemplate, businessDomain: event.target.value })
-                }
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Template mode</span>
-              <select
-                value={activeTemplate.templateMode}
-                onChange={(event) => updateMode(event.target.value as TemplateMode)}
-              >
-                {availableModes.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {mode}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {showRawWarning ? (
-              <div className="warning-box">
-                Raw mode can break template safety. Choose it again to confirm.
+            <div className="panel-header-row">
+              <div>
+                <h3>Template metadata</h3>
+                <p className="muted-copy">Name it, set the domain, then choose a build mode.</p>
               </div>
-            ) : null}
+              <span className="pill subtle">Primary</span>
+            </div>
+            <div className="form-section">
+              <p className="section-label">Template basics</p>
+              <div className="field-row">
+                <label className="field">
+                  <span className="field-label">Template name</span>
+                  <input
+                    value={activeTemplate.name}
+                    onChange={(event) =>
+                      updateDraft({ ...activeTemplate, name: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Business domain</span>
+                  <input
+                    value={activeTemplate.businessDomain}
+                    onChange={(event) =>
+                      updateDraft({ ...activeTemplate, businessDomain: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span className="field-label">Template mode</span>
+                <select
+                  value={activeTemplate.templateMode}
+                  onChange={(event) => updateMode(event.target.value as TemplateMode)}
+                >
+                  {availableModes.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {showRawWarning ? (
+                <div className="warning-box">
+                  Raw mode can break template safety. Choose it again to confirm.
+                </div>
+              ) : null}
+            </div>
           </section>
 
           <section className="panel">
