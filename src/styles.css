@@ -275,6 +275,11 @@ pre {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.detail-grid.weighted-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  align-items: start;
+}
+
 .editor-column {
   display: grid;
   gap: 20px;
@@ -285,6 +290,16 @@ pre {
 .panel h4,
 .page-header h2 {
   margin: 0 0 6px;
+}
+
+.primary-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.88));
+  border-color: rgba(249, 115, 22, 0.35);
+  box-shadow: 0 20px 50px rgba(249, 115, 22, 0.14), 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.secondary-panel {
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .field {
@@ -307,6 +322,46 @@ pre {
   letter-spacing: 0.08em;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.form-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.section-label {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.field-row .field + .field {
+  margin-top: 0;
+}
+
+.form-actions {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form-actions .muted-copy {
+  margin: 0;
 }
 
 .eyebrow {
@@ -533,6 +588,9 @@ textarea {
 @media (max-width: 900px) {
   .app-shell,
   .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .detail-grid.weighted-grid {
     grid-template-columns: 1fr;
   }
 
