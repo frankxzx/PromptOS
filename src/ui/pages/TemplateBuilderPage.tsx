@@ -10,12 +10,15 @@ import { syncScenarioToTemplateVersion } from "../../studio/operations";
 import {
   createTemplateTestScenario,
   getTemplateInputSchema,
+  renderEvaluationPreview,
   renderScenarioPreview,
   resolveTemplateVersion,
   validateScenario,
   validateTemplateStructure
 } from "../../studio/render";
 import type {
+  EvaluationDimensionDefinition,
+  LanguageCode,
   PromptTemplate,
   Scenario,
   Snippet,
@@ -92,6 +95,24 @@ function getSnippetChoices(snippets: Snippet[], allowedTypes: Snippet["type"][] 
   return snippets.filter((snippet) => allowedTypes.includes(snippet.type));
 }
 
+const LANGUAGE_OPTIONS: Array<{ value: LanguageCode; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "zh", label: "Chinese" },
+  { value: "es", label: "Spanish" },
+  { value: "ja", label: "Japanese" }
+];
+
+function createEvaluationDimension(index: number): EvaluationDimensionDefinition {
+  return {
+    id: `evaluation-dimension-${index}`,
+    key: `evaluation_dimension_${index}`,
+    label: `Evaluation Dimension ${index}`,
+    description: "Describe what this evaluator should check.",
+    enabledByDefault: true,
+    defaultWeight: 1
+  };
+}
+
 export function TemplateBuilderPage() {
   const { templateId } = useParams();
   const {
@@ -161,6 +182,7 @@ export function TemplateBuilderPage() {
   const bodySegments = parseBodySegments(activeTemplate.body);
   const staticValidation = validateTemplateStructure(activeTemplate, snippets);
   const testPreview = renderScenarioPreview(activeTemplate, activeTestScenario, snippets);
+  const evaluationPreview = renderEvaluationPreview(activeTemplate, activeTestScenario);
   const testValidation = validateScenario(activeTemplate, activeTestScenario, snippets);
   const testInputSchema = getTemplateInputSchema(resolvedTestTemplate);
   const fieldVariantsByKey = new Map(
@@ -170,6 +192,17 @@ export function TemplateBuilderPage() {
     (variant) => variant.type === "snippet"
   );
   const versionOptions = getVersionOptions(activeTemplate);
+  const selectedTestPersonaCards = activeTestScenario.personaBindings.map((binding, index) => {
+    const snippet = snippets.find((item) => item.id === binding.snippetId);
+    const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
+    return {
+      id: binding.id,
+      label: `Persona ${index + 1}`,
+      snippetName: snippet?.name ?? "Missing persona",
+      pinnedVersion: binding.pinnedVersion,
+      content: version?.content ?? "Persona content unavailable."
+    };
+  });
 
   function updateDraft(nextTemplate: PromptTemplate) {
     setDraft(nextTemplate);
@@ -180,6 +213,7 @@ export function TemplateBuilderPage() {
             {
               ...current,
               variableValues: { ...current.variableValues },
+              personaBindings: current.personaBindings.map((item) => ({ ...item })),
               variantSnippetBindings: current.variantSnippetBindings.map((item) => ({ ...item })),
               snippetBindings: current.snippetBindings.map((item) => ({ ...item }))
             },
@@ -473,6 +507,74 @@ export function TemplateBuilderPage() {
     });
   }
 
+  function addTestPersona() {
+    const defaultPersona = snippets.find((item) => item.type === "persona");
+    updateTestScenario({
+      ...activeTestScenario,
+      personaBindings: [
+        ...activeTestScenario.personaBindings,
+        {
+          id: `persona-binding-${Date.now()}`,
+          snippetId: defaultPersona?.id,
+          pinnedVersion: defaultPersona?.currentVersion
+        }
+      ]
+    });
+  }
+
+  function updateTestPersona(index: number, snippetId: string) {
+    if (!snippetId) {
+      updateTestScenario({
+        ...activeTestScenario,
+        personaBindings: activeTestScenario.personaBindings.filter(
+          (_, itemIndex) => itemIndex !== index
+        )
+      });
+      return;
+    }
+    const snippet = snippets.find((item) => item.id === snippetId);
+    if (!snippet) {
+      return;
+    }
+    updateTestScenario({
+      ...activeTestScenario,
+      personaBindings: activeTestScenario.personaBindings.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              snippetId,
+              pinnedVersion: snippet.currentVersion
+            }
+          : item
+      )
+    });
+  }
+
+  function updateTestPersonaVersion(index: number, version: number) {
+    updateTestScenario({
+      ...activeTestScenario,
+      personaBindings: activeTestScenario.personaBindings.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, pinnedVersion: version } : item
+      )
+    });
+  }
+
+  function moveTestPersona(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= activeTestScenario.personaBindings.length) {
+      return;
+    }
+    const nextBindings = [...activeTestScenario.personaBindings];
+    [nextBindings[index], nextBindings[nextIndex]] = [
+      nextBindings[nextIndex],
+      nextBindings[index]
+    ];
+    updateTestScenario({
+      ...activeTestScenario,
+      personaBindings: nextBindings
+    });
+  }
+
   function loadTestCase(testCaseId: string) {
     setSelectedTestCaseId(testCaseId);
     if (testCaseId === "__default__") {
@@ -497,7 +599,12 @@ export function TemplateBuilderPage() {
       id: selectedTestCaseId !== "__default__" ? selectedTestCaseId : `test-case-${Date.now()}`,
       name: nextName,
       templateVersion: activeTestScenario.templateVersion,
+      language: activeTestScenario.language,
       variableValues: { ...activeTestScenario.variableValues },
+      evaluationDimensions: activeTestScenario.evaluationDimensions.map((item) => ({
+        ...item
+      })),
+      personaBindings: activeTestScenario.personaBindings.map((item) => ({ ...item })),
       variantSnippetBindings: activeTestScenario.variantSnippetBindings.map((item) => ({
         ...item
       })),
@@ -516,6 +623,65 @@ export function TemplateBuilderPage() {
     setSelectedTestCaseId(nextTestCase.id);
     setTestCaseName(nextName);
     setToast({ tone: "success", message: "Template test case saved." });
+  }
+
+  function updateSupportedLanguages(rawValue: string) {
+    const nextLanguages = rawValue
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter((item): item is LanguageCode =>
+        LANGUAGE_OPTIONS.some((option) => option.value === item)
+      );
+    const deduped = Array.from(new Set(nextLanguages)) as LanguageCode[];
+    const fallback: LanguageCode[] = deduped.length > 0 ? deduped : ["en"];
+    updateDraft({
+      ...activeTemplate,
+      supportedLanguages: fallback,
+      defaultLanguage: fallback.includes(activeTemplate.defaultLanguage)
+        ? activeTemplate.defaultLanguage
+        : fallback[0]
+    });
+  }
+
+  function updateEvaluationDimension(
+    index: number,
+    nextDimension: EvaluationDimensionDefinition
+  ) {
+    updateDraft({
+      ...activeTemplate,
+      evaluationDimensions: activeTemplate.evaluationDimensions.map((item, itemIndex) =>
+        itemIndex === index ? nextDimension : item
+      )
+    });
+  }
+
+  function addEvaluationDimension() {
+    updateDraft({
+      ...activeTemplate,
+      evaluationDimensions: [
+        ...activeTemplate.evaluationDimensions,
+        createEvaluationDimension(activeTemplate.evaluationDimensions.length + 1)
+      ]
+    });
+  }
+
+  function updateTestLanguage(language: LanguageCode) {
+    updateTestScenario({
+      ...activeTestScenario,
+      language
+    });
+  }
+
+  function updateTestEvaluationDimension(
+    key: string,
+    updates: Partial<Scenario["evaluationDimensions"][number]>
+  ) {
+    updateTestScenario({
+      ...activeTestScenario,
+      evaluationDimensions: activeTestScenario.evaluationDimensions.map((item) =>
+        item.key === key ? { ...item, ...updates } : item
+      )
+    });
   }
 
   return (
@@ -607,6 +773,32 @@ export function TemplateBuilderPage() {
                 ))}
               </select>
             </label>
+            <label className="field">
+              <span className="field-label">Supported languages</span>
+              <input
+                value={activeTemplate.supportedLanguages.join(", ")}
+                onChange={(event) => updateSupportedLanguages(event.target.value)}
+                placeholder="en, zh"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Default language</span>
+              <select
+                value={activeTemplate.defaultLanguage}
+                onChange={(event) =>
+                  updateDraft({
+                    ...activeTemplate,
+                    defaultLanguage: event.target.value as LanguageCode
+                  })
+                }
+              >
+                {activeTemplate.supportedLanguages.map((language) => (
+                  <option key={language} value={language}>
+                    {LANGUAGE_OPTIONS.find((item) => item.value === language)?.label ?? language}
+                  </option>
+                ))}
+              </select>
+            </label>
             {showRawWarning ? (
               <div className="warning-box">
                 Raw mode can break template safety. Choose it again to confirm.
@@ -640,7 +832,7 @@ export function TemplateBuilderPage() {
           <section className="panel">
             <div className="panel-header-row">
               <div>
-                <h3>Variants</h3>
+                <h3>Conversation variants</h3>
                 <p className="muted-copy">
                   Variants appear as scenario form fields when creating or editing an instance.
                 </p>
@@ -754,6 +946,7 @@ export function TemplateBuilderPage() {
                           }
                         >
                           <option value="role">role</option>
+                          <option value="persona">persona</option>
                           <option value="instruction">instruction</option>
                           <option value="format">format</option>
                           <option value="safety">safety</option>
@@ -837,6 +1030,7 @@ export function TemplateBuilderPage() {
                       }
                     >
                       <option value="role">role</option>
+                      <option value="persona">persona</option>
                       <option value="instruction">instruction</option>
                       <option value="format">format</option>
                       <option value="safety">safety</option>
@@ -893,6 +1087,107 @@ export function TemplateBuilderPage() {
               ))}
             </div>
           </section>
+
+          <section className="panel">
+            <div className="panel-header-row">
+              <div>
+                <h3>Evaluation setup</h3>
+                <p className="muted-copy">
+                  Define the evaluation prompt body and the dimensions an evaluator can score.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={addEvaluationDimension}
+              >
+                Add dimension
+              </button>
+            </div>
+            <label className="field">
+              <span className="field-label">Evaluation prompt body</span>
+              <textarea
+                rows={8}
+                value={activeTemplate.evaluationBody}
+                onChange={(event) =>
+                  updateDraft({ ...activeTemplate, evaluationBody: event.target.value })
+                }
+              />
+            </label>
+            <div className="stack-list">
+              {activeTemplate.evaluationDimensions.map((dimension, index) => (
+                <article key={dimension.id} className="nested-card">
+                  <label className="field">
+                    <span className="field-label">Dimension label</span>
+                    <input
+                      value={dimension.label}
+                      onChange={(event) =>
+                        updateEvaluationDimension(index, {
+                          ...dimension,
+                          label: event.target.value
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Dimension key</span>
+                    <input
+                      value={dimension.key}
+                      onChange={(event) =>
+                        updateEvaluationDimension(index, {
+                          ...dimension,
+                          key: event.target.value
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Description</span>
+                    <textarea
+                      rows={3}
+                      value={dimension.description}
+                      onChange={(event) =>
+                        updateEvaluationDimension(index, {
+                          ...dimension,
+                          description: event.target.value
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Default weight</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={dimension.defaultWeight ?? 1}
+                      onChange={(event) =>
+                        updateEvaluationDimension(index, {
+                          ...dimension,
+                          defaultWeight: Number(event.target.value) || 1
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Enabled by default</span>
+                    <select
+                      value={String(dimension.enabledByDefault)}
+                      onChange={(event) =>
+                        updateEvaluationDimension(index, {
+                          ...dimension,
+                          enabledByDefault: event.target.value === "true"
+                        })
+                      }
+                    >
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
+                </article>
+              ))}
+            </div>
+          </section>
         </aside>
 
         <section className="editor-column center">
@@ -902,7 +1197,8 @@ export function TemplateBuilderPage() {
                 <h3>Template structure</h3>
                 <p className="muted-copy">
                   Add ordered blocks here. Text blocks can reference base variables and variants;
-                  slot blocks reference your slot definitions.
+                  slot blocks reference your slot definitions. Use <code>{"{{personas}}"}</code>{" "}
+                  when the dialogue prompt should inject ordered persona cards.
                 </p>
               </div>
               {activeTemplate.templateMode === "visual" ? (
@@ -1126,6 +1422,102 @@ export function TemplateBuilderPage() {
                   ))}
                 </select>
               </label>
+              <label className="field">
+                <span className="field-label">Language under test</span>
+                <select
+                  value={activeTestScenario.language}
+                  onChange={(event) => updateTestLanguage(event.target.value as LanguageCode)}
+                >
+                  {resolvedTestTemplate.supportedLanguages.map((language) => (
+                    <option key={language} value={language}>
+                      {LANGUAGE_OPTIONS.find((item) => item.value === language)?.label ?? language}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="panel-header-row">
+                <strong>Persona cards</strong>
+                <button type="button" className="ghost-button" onClick={addTestPersona}>
+                  Add persona
+                </button>
+              </div>
+              {activeTestScenario.personaBindings.length === 0 ? (
+                <p className="muted-copy">
+                  No persona cards selected. Add one if this template uses{" "}
+                  <code>{"{{personas}}"}</code>.
+                </p>
+              ) : (
+                <div className="stack-list">
+                  {activeTestScenario.personaBindings.map((binding, index) => {
+                    const personaSnippets = snippets.filter((item) => item.type === "persona");
+                    const selectedSnippet = personaSnippets.find(
+                      (snippet) => snippet.id === binding.snippetId
+                    );
+
+                    return (
+                      <article key={binding.id} className="nested-card">
+                        <div className="panel-header-row">
+                          <strong>Persona {index + 1}</strong>
+                          <div className="inline-actions">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => moveTestPersona(index, -1)}
+                            >
+                              Up
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => moveTestPersona(index, 1)}
+                            >
+                              Down
+                            </button>
+                          </div>
+                        </div>
+                        <label className="field">
+                          <span className="field-label">Persona snippet</span>
+                          <select
+                            value={binding.snippetId ?? ""}
+                            onChange={(event) => updateTestPersona(index, event.target.value)}
+                          >
+                            <option value="">Select persona</option>
+                            {personaSnippets.map((snippet) => (
+                              <option key={snippet.id} value={snippet.id}>
+                                {snippet.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span className="field-label">Pinned version</span>
+                          <select
+                            value={binding.pinnedVersion ?? selectedSnippet?.currentVersion ?? ""}
+                            onChange={(event) =>
+                              updateTestPersonaVersion(index, Number(event.target.value))
+                            }
+                            disabled={!selectedSnippet}
+                          >
+                            {selectedSnippet?.versions.map((version) => (
+                              <option key={version.version} value={version.version}>
+                                v{version.version}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => updateTestPersona(index, "")}
+                        >
+                          Remove persona
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
 
               {testInputSchema.map((item) => {
                 const fieldVariant = fieldVariantsByKey.get(item.key);
@@ -1306,6 +1698,48 @@ export function TemplateBuilderPage() {
                   );
                 })}
               </div>
+
+              {activeTestScenario.evaluationDimensions.length > 0 ? (
+                <div className="stack-list">
+                  {activeTestScenario.evaluationDimensions.map((dimension) => (
+                    <article key={dimension.key} className="nested-card">
+                      <div className="panel-header-row">
+                        <strong>{dimension.label}</strong>
+                        <span className="version-chip">{dimension.key}</span>
+                      </div>
+                      <p className="muted-copy">{dimension.description}</p>
+                      <label className="field">
+                        <span className="field-label">Enabled</span>
+                        <select
+                          value={String(dimension.enabled)}
+                          onChange={(event) =>
+                            updateTestEvaluationDimension(dimension.key, {
+                              enabled: event.target.value === "true"
+                            })
+                          }
+                        >
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span className="field-label">Weight</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={dimension.weight ?? 1}
+                          onChange={(event) =>
+                            updateTestEvaluationDimension(dimension.key, {
+                              weight: Number(event.target.value) || 1
+                            })
+                          }
+                        />
+                      </label>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </article>
 
             {testValidation.errors.length > 0 ? (
@@ -1325,7 +1759,23 @@ export function TemplateBuilderPage() {
             ) : null}
 
             <div className="preview-block-list">
-              {testPreview.resolvedBlocks.map((block) => (
+              {selectedTestPersonaCards.map((card) => (
+                <article key={card.id} className="source-block">
+                  <div className="panel-header-row">
+                    <span className="source-pill">
+                      {card.snippetName}
+                      {card.pinnedVersion ? ` · v${card.pinnedVersion}` : ""}
+                    </span>
+                    <span className="ghost-link">{card.label}</span>
+                  </div>
+                  <pre>{card.content}</pre>
+                </article>
+              ))}
+            </div>
+            <div className="preview-block-list">
+              {testPreview.resolvedBlocks
+                .filter((block) => !block.slot.startsWith("persona:"))
+                .map((block) => (
                 <article key={block.id} className="source-block">
                   <div className="panel-header-row">
                     <span className="source-pill">
@@ -1343,6 +1793,10 @@ export function TemplateBuilderPage() {
             <article className="render-output">
               <h4>Rendered test prompt</h4>
               <pre>{testPreview.renderedPrompt}</pre>
+            </article>
+            <article className="render-output">
+              <h4>Rendered evaluation prompt</h4>
+              <pre>{evaluationPreview.renderedPrompt}</pre>
             </article>
           </section>
         </aside>

@@ -1,9 +1,13 @@
 import type {
   ConditionRule,
+  EvaluationDimensionDefinition,
+  LanguageCode,
   PromptTemplate,
   PromptTemplateVersion,
   RenderPreviewResult,
   Scenario,
+  ScenarioEvaluationDimension,
+  ScenarioPersonaBinding,
   ScenarioVariantSnippetBinding,
   Snippet,
   TemplateTestCase,
@@ -19,10 +23,22 @@ export interface TemplateValidationResult {
   warnings: string[];
 }
 
+const LANGUAGE_LABELS: Record<LanguageCode, string> = {
+  en: "English",
+  zh: "Chinese",
+  es: "Spanish",
+  ja: "Japanese"
+};
+
+const PERSONAS_PLACEHOLDER_PATTERN = /\{\{\s*personas\s*\}\}/;
+
 function cloneTestCases(testCases: TemplateTestCase[] | undefined) {
   return (testCases ?? []).map((item) => ({
     ...item,
+    language: item.language ?? "en",
     variableValues: { ...item.variableValues },
+    evaluationDimensions: cloneScenarioEvaluationDimensions(item.evaluationDimensions),
+    personaBindings: cloneScenarioPersonaBindings(item.personaBindings),
     variantSnippetBindings: item.variantSnippetBindings.map((entry) => ({ ...entry })),
     snippetBindings: item.snippetBindings.map((entry) => ({ ...entry }))
   }));
@@ -60,6 +76,42 @@ function cloneTemplateSlots(slots: TemplateSlotDefinition[] | undefined) {
   return (slots ?? []).map(cloneTemplateSlot);
 }
 
+function cloneEvaluationDimensionDefinition(
+  item: EvaluationDimensionDefinition
+): EvaluationDimensionDefinition {
+  return { ...item };
+}
+
+function cloneEvaluationDimensionDefinitions(
+  items: EvaluationDimensionDefinition[] | undefined
+) {
+  return (items ?? []).map(cloneEvaluationDimensionDefinition);
+}
+
+function cloneScenarioEvaluationDimension(
+  item: ScenarioEvaluationDimension
+): ScenarioEvaluationDimension {
+  return { ...item };
+}
+
+function cloneScenarioEvaluationDimensions(
+  items: ScenarioEvaluationDimension[] | undefined
+) {
+  return (items ?? []).map(cloneScenarioEvaluationDimension);
+}
+
+function cloneScenarioPersonaBinding(
+  item: ScenarioPersonaBinding
+): ScenarioPersonaBinding {
+  return { ...item };
+}
+
+function cloneScenarioPersonaBindings(
+  items: ScenarioPersonaBinding[] | undefined
+) {
+  return (items ?? []).map(cloneScenarioPersonaBinding);
+}
+
 function cloneLocalBlocks(blocks: PromptTemplate["localBlocks"] | PromptTemplateVersion["localBlocks"]) {
   return (blocks ?? []).map((block) => ({
     ...block,
@@ -91,6 +143,68 @@ function interpolateTemplate(template: string, variables: VariableValues): strin
     }
     return value === undefined ? `{{${key}}}` : value;
   });
+}
+
+function buildLanguagePolicy(language: LanguageCode) {
+  return `All assistant replies must be in ${LANGUAGE_LABELS[language]}.`;
+}
+
+function buildEvaluationLanguagePolicy(language: LanguageCode) {
+  return `Evaluate whether the assistant kept the conversation in ${LANGUAGE_LABELS[language]}.`;
+}
+
+export function hasPersonasPlaceholder(body: string) {
+  return PERSONAS_PLACEHOLDER_PATTERN.test(body);
+}
+
+function buildPersonaSection(
+  scenario: Scenario,
+  snippets: Snippet[],
+  renderVariables: VariableValues,
+  warnings: string[]
+) {
+  const resolvedPersonas = scenario.personaBindings
+    .map((binding, index) => {
+      if (!binding.snippetId || !binding.pinnedVersion) {
+        warnings.push(`Persona card ${index + 1} is missing a snippet selection.`);
+        return null;
+      }
+
+      const snippet = snippets.find((item) => item.id === binding.snippetId);
+      if (!snippet) {
+        warnings.push(`Persona card ${index + 1} references a missing snippet.`);
+        return null;
+      }
+      if (snippet.type !== "persona") {
+        warnings.push(`Persona card ${index + 1} must use a persona snippet.`);
+        return null;
+      }
+
+      const content = getSnippetContent(snippet, binding.pinnedVersion);
+      if (!content) {
+        warnings.push(
+          `Persona snippet "${snippet.name}" version ${binding.pinnedVersion} is unavailable.`
+        );
+        return null;
+      }
+
+      return {
+        id: `${binding.id}-${binding.snippetId}-${binding.pinnedVersion}`,
+        sourceType: "snippet" as const,
+        sourceName: snippet.name,
+        sourceVersion: binding.pinnedVersion,
+        slot: `persona:${index + 1}`,
+        content: interpolateTemplate(content, renderVariables)
+      };
+    })
+    .filter((value): value is NonNullable<typeof value> => Boolean(value));
+
+  return {
+    text: resolvedPersonas
+      .map((item, index) => `Persona ${index + 1}:\n${item.content}`)
+      .join("\n\n"),
+    blocks: resolvedPersonas
+  };
 }
 
 function getSnippetContent(snippet: Snippet, version: number): string | undefined {
@@ -163,6 +277,12 @@ export function resolveTemplateVersion(
       variants: template.variants.map(cloneVariant),
       slots: cloneTemplateSlots(template.slots),
       localBlocks: cloneLocalBlocks(template.localBlocks),
+      supportedLanguages: [...(template.supportedLanguages ?? ["en"])],
+      defaultLanguage: template.defaultLanguage ?? "en",
+      evaluationBody: template.evaluationBody ?? "",
+      evaluationDimensions: cloneEvaluationDimensionDefinitions(
+        template.evaluationDimensions
+      ),
       testCases: cloneTestCases(template.testCases)
     };
   }
@@ -182,6 +302,12 @@ export function resolveTemplateVersion(
     variants: snapshot.variants.map(cloneVariant),
     slots: cloneTemplateSlots(snapshot.slots),
     localBlocks: cloneLocalBlocks(snapshot.localBlocks),
+    supportedLanguages: [...(snapshot.supportedLanguages ?? template.supportedLanguages ?? ["en"])],
+    defaultLanguage: snapshot.defaultLanguage ?? template.defaultLanguage ?? "en",
+    evaluationBody: snapshot.evaluationBody ?? template.evaluationBody ?? "",
+    evaluationDimensions: cloneEvaluationDimensionDefinitions(
+      snapshot.evaluationDimensions ?? template.evaluationDimensions
+    ),
     testCases: cloneTestCases(snapshot.testCases)
   };
 }
@@ -204,10 +330,21 @@ export function createTemplateTestScenario(
     templateId: template.id,
     templateVersion,
     status: "draft",
+    language: testCase?.language ?? resolvedTemplate.defaultLanguage ?? "en",
     variableValues: {
       ...getTemplateDefaults(resolvedTemplate),
       ...(testCase?.variableValues ?? {})
     },
+    evaluationDimensions: testCase?.evaluationDimensions
+      ? cloneScenarioEvaluationDimensions(testCase.evaluationDimensions)
+      : resolvedTemplate.evaluationDimensions.map((item) => ({
+          key: item.key,
+          label: item.label,
+          description: item.description,
+          enabled: item.enabledByDefault,
+          weight: item.defaultWeight ?? 1
+        })),
+    personaBindings: cloneScenarioPersonaBindings(testCase?.personaBindings),
     variantSnippetBindings:
       testCase?.variantSnippetBindings.map((item) => ({ ...item })) ??
       resolvedTemplate.variants
@@ -229,6 +366,7 @@ export function createTemplateTestScenario(
             snippets.find((item) => item.id === slot.defaultSnippetId)?.currentVersion
         })),
     renderedPrompt: "",
+    renderedEvaluationPrompt: "",
     version: 1,
     updatedAt: new Date().toISOString(),
     updatedBy: "Admin User",
@@ -244,7 +382,28 @@ export function validateTemplateStructure(
   const warnings: string[] = [];
   const versionTemplate = resolveTemplateVersion(template, template.version);
 
+  if (!versionTemplate.body.trim()) {
+    errors.push("Dialogue prompt structure is required.");
+  }
+
+  if (!hasPersonasPlaceholder(versionTemplate.body)) {
+    errors.push('Dialogue prompt must include the "{{personas}}" placeholder.');
+  }
+
+  if (!versionTemplate.evaluationBody.trim()) {
+    errors.push("Evaluation prompt structure is required.");
+  }
+
+  if (versionTemplate.supportedLanguages.length === 0) {
+    errors.push("At least one supported language is required.");
+  }
+
+  if (!versionTemplate.supportedLanguages.includes(versionTemplate.defaultLanguage)) {
+    errors.push("Default language must be included in supported languages.");
+  }
+
   const fieldKeys = new Set<string>();
+  fieldKeys.add("language");
   versionTemplate.variableSchema.forEach((item) => {
     if (fieldKeys.has(item.key)) {
       errors.push(`Duplicate field key "${item.key}".`);
@@ -309,7 +468,7 @@ export function validateTemplateStructure(
     versionTemplate.body.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
   ).map((match) => match[1]);
   bodyVariableTokens.forEach((token) => {
-    if (!fieldKeys.has(token)) {
+    if (!fieldKeys.has(token) && token !== "personas") {
       errors.push(`Body references unknown field "${token}".`);
     }
   });
@@ -323,6 +482,16 @@ export function validateTemplateStructure(
       !versionTemplate.localBlocks.some((item) => item.slot === slot)
     ) {
       warnings.push(`Body references unknown slot "${slot}".`);
+    }
+  });
+
+  const evaluationFieldKeys = new Set([...fieldKeys, "evaluation_dimensions"]);
+  const evaluationTokens = Array.from(
+    (versionTemplate.evaluationBody ?? "").matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
+  ).map((match) => match[1]);
+  evaluationTokens.forEach((token) => {
+    if (!evaluationFieldKeys.has(token)) {
+      errors.push(`Evaluation body references unknown field "${token}".`);
     }
   });
 
@@ -380,7 +549,10 @@ export function buildScenarioRenderVariables(
   warnings: string[]
 ) {
   const resolvedTemplate = resolveTemplateVersion(template, scenario.templateVersion);
-  const baseVariables: VariableValues = { ...scenario.variableValues };
+  const baseVariables: VariableValues = {
+    ...scenario.variableValues,
+    language: scenario.language
+  };
 
   resolvedTemplate.variants.forEach((variant) => {
     if (variant.type !== "snippet") {
@@ -396,6 +568,27 @@ export function buildScenarioRenderVariables(
   });
 
   return baseVariables;
+}
+
+function resolveScenarioEvaluationDimensions(
+  template: PromptTemplate,
+  scenario: Scenario
+) {
+  const resolvedTemplate = resolveTemplateVersion(template, scenario.templateVersion);
+  const scenarioDimensions = new Map(
+    scenario.evaluationDimensions.map((item) => [item.key, item])
+  );
+
+  return resolvedTemplate.evaluationDimensions.map((item) => {
+    const existing = scenarioDimensions.get(item.key);
+    return {
+      key: item.key,
+      label: item.label,
+      description: item.description,
+      enabled: existing?.enabled ?? item.enabledByDefault,
+      weight: existing?.weight ?? item.defaultWeight ?? 1
+    };
+  });
 }
 
 function resolveSlot(
@@ -478,7 +671,18 @@ export function renderScenarioPreview(
     })
     .map((item) => item.key);
 
+  const personaSection = buildPersonaSection(
+    scenario,
+    snippets,
+    renderVariables,
+    renderWarnings
+  );
+  if (hasPersonasPlaceholder(resolvedTemplate.body) && personaSection.blocks.length === 0) {
+    renderWarnings.push("Dialogue prompt expects persona cards, but none are configured.");
+  }
+
   const resolvedBlocks = [
+    ...personaSection.blocks,
     ...resolvedTemplate.slots
       .map((slot) => resolveSlot(slot, { ...scenario, variableValues: renderVariables }, snippets, renderWarnings))
       .filter((value): value is NonNullable<typeof value> => Boolean(value)),
@@ -494,6 +698,7 @@ export function renderScenarioPreview(
   ];
 
   let renderedPrompt = interpolateTemplate(resolvedTemplate.body, renderVariables);
+  renderedPrompt = renderedPrompt.replace(/\{\{\s*personas\s*\}\}/g, personaSection.text);
   resolvedTemplate.slots.forEach((slot) => {
     const block = resolvedBlocks.find(
       (item) => item.sourceType === "snippet" && item.slot === slot.slot
@@ -515,11 +720,62 @@ export function renderScenarioPreview(
     renderWarnings.push("One or more slots remain unresolved.");
   }
 
+  if (/\{\{\s*personas\s*\}\}/.test(renderedPrompt)) {
+    renderWarnings.push("Persona placeholder remains unresolved.");
+  }
+
+  renderedPrompt = [buildLanguagePolicy(scenario.language), renderedPrompt]
+    .filter(Boolean)
+    .join("\n\n");
+
   return {
     renderedPrompt: renderedPrompt.trim(),
     resolvedBlocks,
     missingVariables,
     renderWarnings
+  };
+}
+
+export function renderEvaluationPreview(
+  template: PromptTemplate,
+  scenario: Scenario
+): RenderPreviewResult {
+  const resolvedTemplate = resolveTemplateVersion(template, scenario.templateVersion);
+  const evaluationDimensions = resolveScenarioEvaluationDimensions(template, scenario);
+  const enabledDimensions = evaluationDimensions.filter((item) => item.enabled);
+  const renderVariables: VariableValues = {
+    ...scenario.variableValues,
+    language: scenario.language,
+    evaluation_dimensions: enabledDimensions
+      .map(
+        (item) =>
+          `- ${item.label} (weight: ${item.weight ?? 1}): ${item.description}`
+      )
+      .join("\n")
+  };
+  const missingVariables = Array.from(
+    (resolvedTemplate.evaluationBody ?? "").matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
+  )
+    .map((match) => match[1])
+    .filter(
+      (key) =>
+        renderVariables[key] === undefined &&
+        key !== "evaluation_dimensions"
+    );
+
+  const renderedPrompt = [
+    buildEvaluationLanguagePolicy(scenario.language),
+    interpolateTemplate(resolvedTemplate.evaluationBody ?? "", renderVariables)
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+
+  return {
+    renderedPrompt,
+    resolvedBlocks: [],
+    missingVariables,
+    renderWarnings: enabledDimensions.length === 0 ? ["No evaluation dimensions enabled."] : []
   };
 }
 
@@ -530,7 +786,12 @@ export function validateScenario(
 ) {
   const resolvedTemplate = resolveTemplateVersion(template, scenario.templateVersion);
   const preview = renderScenarioPreview(template, scenario, snippets);
+  const evaluationPreview = renderEvaluationPreview(template, scenario);
   const errors: string[] = [];
+
+  if (!resolvedTemplate.supportedLanguages.includes(scenario.language)) {
+    errors.push(`Language "${scenario.language}" is not supported by the template.`);
+  }
 
   if (preview.missingVariables.length > 0) {
     errors.push(`Missing required variables: ${preview.missingVariables.join(", ")}`);
@@ -596,6 +857,25 @@ export function validateScenario(
       }
     });
 
+  scenario.personaBindings.forEach((binding, index) => {
+    if (!binding.snippetId || !binding.pinnedVersion) {
+      errors.push(`Persona card ${index + 1} requires a snippet selection.`);
+      return;
+    }
+    const snippet = snippets.find((item) => item.id === binding.snippetId);
+    if (!snippet) {
+      errors.push(`Persona card ${index + 1} references a missing snippet.`);
+      return;
+    }
+    if (snippet.type !== "persona") {
+      errors.push(`Persona card ${index + 1} only accepts persona snippets.`);
+      return;
+    }
+    if (!snippet.versions.some((item) => item.version === binding.pinnedVersion)) {
+      errors.push(`Persona snippet "${snippet.name}" version ${binding.pinnedVersion} is unavailable.`);
+    }
+  });
+
   resolvedTemplate.slots.forEach((slot) => {
     if (!evaluateCondition(slot.conditionRule, scenario.variableValues)) {
       return;
@@ -637,8 +917,22 @@ export function validateScenario(
     errors.push("Scenario contains unresolved slots.");
   }
 
+  if (preview.renderWarnings.some((item) => item.includes("persona cards"))) {
+    errors.push("Scenario is missing persona cards required by the dialogue prompt.");
+  }
+
+  resolveScenarioEvaluationDimensions(template, scenario).forEach((dimension) => {
+    if (!dimension.enabled) {
+      return;
+    }
+    if ((dimension.weight ?? 0) <= 0) {
+      errors.push(`Evaluation dimension "${dimension.label}" must have a positive weight.`);
+    }
+  });
+
   return {
     errors,
-    preview
+    preview,
+    evaluationPreview
   };
 }

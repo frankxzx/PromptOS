@@ -17,11 +17,15 @@ import {
 } from "./render";
 import { createScenarioFromTemplate, syncScenarioToTemplateVersion } from "./operations";
 import type {
+  EvaluationDimensionDefinition,
   EntityStatus,
+  LanguageCode,
   LocalBlock,
   PromptTemplate,
   PromptTemplateVersion,
   Scenario,
+  ScenarioEvaluationDimension,
+  ScenarioPersonaBinding,
   ScenarioSlotBinding,
   ScenarioVariantSnippetBinding,
   ScenarioVersion,
@@ -39,10 +43,17 @@ import type {
 
 const STORAGE_KEY = "prompt-studio-v1-state";
 
+function cloneLanguages(languages: LanguageCode[] | undefined) {
+  return [...(languages ?? ["en"])];
+}
+
 function cloneTestCases(testCases: PromptTemplate["testCases"] | undefined) {
   return (testCases ?? []).map((item) => ({
     ...item,
+    language: item.language ?? "en",
     variableValues: { ...item.variableValues },
+    evaluationDimensions: cloneScenarioEvaluationDimensions(item.evaluationDimensions),
+    personaBindings: cloneScenarioPersonaBindings(item.personaBindings),
     variantSnippetBindings: item.variantSnippetBindings.map((entry) => ({ ...entry })),
     snippetBindings: item.snippetBindings.map((entry) => ({ ...entry }))
   }));
@@ -103,6 +114,40 @@ function cloneLocalBlocks(blocks: LocalBlock[] | undefined) {
   return (blocks ?? []).map(cloneLocalBlock);
 }
 
+function cloneEvaluationDimensionDefinition(
+  item: EvaluationDimensionDefinition
+): EvaluationDimensionDefinition {
+  return { ...item };
+}
+
+function cloneEvaluationDimensionDefinitions(
+  items: EvaluationDimensionDefinition[] | undefined
+) {
+  return (items ?? []).map(cloneEvaluationDimensionDefinition);
+}
+
+function cloneScenarioEvaluationDimension(
+  item: ScenarioEvaluationDimension
+): ScenarioEvaluationDimension {
+  return { ...item };
+}
+
+function cloneScenarioEvaluationDimensions(
+  items: ScenarioEvaluationDimension[] | undefined
+) {
+  return (items ?? []).map(cloneScenarioEvaluationDimension);
+}
+
+function cloneScenarioPersonaBinding(
+  item: ScenarioPersonaBinding
+): ScenarioPersonaBinding {
+  return { ...item };
+}
+
+function cloneScenarioPersonaBindings(items: ScenarioPersonaBinding[] | undefined) {
+  return (items ?? []).map(cloneScenarioPersonaBinding);
+}
+
 function cloneScenarioVariantBindings(
   bindings: ScenarioVariantSnippetBinding[] | undefined
 ) {
@@ -124,6 +169,10 @@ function normalizeTemplate(template: PromptTemplate): PromptTemplate {
     variants: cloneTemplateVariants(template.variants),
     slots: cloneTemplateSlots(template.slots),
     localBlocks: cloneLocalBlocks(template.localBlocks),
+    supportedLanguages: cloneLanguages(template.supportedLanguages),
+    defaultLanguage: template.defaultLanguage ?? "en",
+    evaluationBody: template.evaluationBody ?? "",
+    evaluationDimensions: cloneEvaluationDimensionDefinitions(template.evaluationDimensions),
     testCases: cloneTestCases(template.testCases),
     versions: (template.versions ?? []).map((version) => ({
       ...version,
@@ -131,6 +180,12 @@ function normalizeTemplate(template: PromptTemplate): PromptTemplate {
       variants: cloneTemplateVariants(version.variants),
       slots: cloneTemplateSlots(version.slots),
       localBlocks: cloneLocalBlocks(version.localBlocks),
+      supportedLanguages: cloneLanguages(version.supportedLanguages),
+      defaultLanguage: version.defaultLanguage ?? template.defaultLanguage ?? "en",
+      evaluationBody: version.evaluationBody ?? template.evaluationBody ?? "",
+      evaluationDimensions: cloneEvaluationDimensionDefinitions(
+        version.evaluationDimensions
+      ),
       testCases: cloneTestCases(version.testCases)
     }))
   };
@@ -139,14 +194,22 @@ function normalizeTemplate(template: PromptTemplate): PromptTemplate {
 function normalizeScenario(scenario: Scenario): Scenario {
   return {
     ...scenario,
+    language: scenario.language ?? "en",
     variableValues: { ...(scenario.variableValues ?? {}) },
+    evaluationDimensions: cloneScenarioEvaluationDimensions(scenario.evaluationDimensions),
+    personaBindings: cloneScenarioPersonaBindings(scenario.personaBindings),
     variantSnippetBindings: cloneScenarioVariantBindings(scenario.variantSnippetBindings),
     snippetBindings: cloneScenarioSlotBindings(scenario.snippetBindings),
+    renderedEvaluationPrompt: scenario.renderedEvaluationPrompt ?? "",
     versions: (scenario.versions ?? []).map((version) => ({
       ...version,
+      language: version.language ?? scenario.language ?? "en",
       variableValues: { ...(version.variableValues ?? {}) },
+      evaluationDimensions: cloneScenarioEvaluationDimensions(version.evaluationDimensions),
+      personaBindings: cloneScenarioPersonaBindings(version.personaBindings),
       variantSnippetBindings: cloneScenarioVariantBindings(version.variantSnippetBindings),
-      snippetBindings: cloneScenarioSlotBindings(version.snippetBindings)
+      snippetBindings: cloneScenarioSlotBindings(version.snippetBindings),
+      renderedEvaluationPrompt: version.renderedEvaluationPrompt ?? ""
     }))
   };
 }
@@ -232,6 +295,8 @@ interface StudioContextValue extends StudioState {
     templateVersion: number;
     name?: string;
     description?: string;
+    language?: LanguageCode;
+    personaBindings?: ScenarioPersonaBinding[];
   }) => string | null;
   getScenarioUsageForSnippet: (snippetId: string) => Array<{
     scenarioId: string;
@@ -288,6 +353,10 @@ function cloneTemplateVersion(template: PromptTemplate): PromptTemplateVersion {
     variants: cloneTemplateVariants(template.variants),
     slots: cloneTemplateSlots(template.slots),
     localBlocks: cloneLocalBlocks(template.localBlocks),
+    supportedLanguages: cloneLanguages(template.supportedLanguages),
+    defaultLanguage: template.defaultLanguage,
+    evaluationBody: template.evaluationBody,
+    evaluationDimensions: cloneEvaluationDimensionDefinitions(template.evaluationDimensions),
     testCases: cloneTestCases(template.testCases),
     updatedAt: template.updatedAt,
     updatedBy: template.updatedBy,
@@ -301,10 +370,14 @@ function cloneScenarioVersion(scenario: Scenario): ScenarioVersion {
     status: scenario.status,
     templateId: scenario.templateId,
     templateVersion: scenario.templateVersion,
+    language: scenario.language,
     variableValues: { ...scenario.variableValues },
+    evaluationDimensions: cloneScenarioEvaluationDimensions(scenario.evaluationDimensions),
+    personaBindings: cloneScenarioPersonaBindings(scenario.personaBindings),
     variantSnippetBindings: cloneScenarioVariantBindings(scenario.variantSnippetBindings),
     snippetBindings: cloneScenarioSlotBindings(scenario.snippetBindings),
     renderedPrompt: scenario.renderedPrompt,
+    renderedEvaluationPrompt: scenario.renderedEvaluationPrompt,
     updatedAt: scenario.updatedAt,
     updatedBy: scenario.updatedBy,
     notes: "Scenario snapshot."
@@ -338,6 +411,7 @@ function templateReferencesSnippet(template: PromptTemplate, snippetId: string) 
     template.slots.some((slot) => slot.defaultSnippetId === snippetId) ||
     template.testCases.some(
       (testCase) =>
+        testCase.personaBindings.some((binding) => binding.snippetId === snippetId) ||
         testCase.variantSnippetBindings.some((binding) => binding.snippetId === snippetId) ||
         testCase.snippetBindings.some((binding) => binding.snippetId === snippetId)
     );
@@ -352,6 +426,7 @@ function templateReferencesSnippet(template: PromptTemplate, snippetId: string) 
       version.slots.some((slot) => slot.defaultSnippetId === snippetId) ||
       (version.testCases ?? []).some(
         (testCase) =>
+          testCase.personaBindings.some((binding) => binding.snippetId === snippetId) ||
           testCase.variantSnippetBindings.some((binding) => binding.snippetId === snippetId) ||
           testCase.snippetBindings.some((binding) => binding.snippetId === snippetId)
       )
@@ -408,6 +483,7 @@ export function StudioProvider({ children }: PropsWithChildren) {
         if (
           state.scenarios.some(
             (scenario) =>
+              scenario.personaBindings.some((binding) => binding.snippetId === snippetId) ||
               scenario.snippetBindings.some((binding) => binding.snippetId === snippetId) ||
               scenario.variantSnippetBindings.some((binding) => binding.snippetId === snippetId)
           )
@@ -473,7 +549,14 @@ export function StudioProvider({ children }: PropsWithChildren) {
 
         return { ok: true, templateId };
       },
-      createScenario: ({ templateId, templateVersion, name, description }) => {
+      createScenario: ({
+        templateId,
+        templateVersion,
+        name,
+        description,
+        language,
+        personaBindings
+      }) => {
         const template = state.templates.find((item) => item.id === templateId);
         if (!template) {
           return null;
@@ -489,8 +572,14 @@ export function StudioProvider({ children }: PropsWithChildren) {
           id: scenarioId,
           name: name?.trim() || baseScenario.name,
           description: description?.trim() || baseScenario.description,
-          renderedPrompt: renderScenarioPreview(template, baseScenario, state.snippets).renderedPrompt
+          language: language ?? baseScenario.language,
+          personaBindings: personaBindings?.map((item) => ({ ...item })) ?? baseScenario.personaBindings,
+          renderedPrompt: "",
+          renderedEvaluationPrompt: ""
         };
+        const validation = validateScenario(template, scenario, state.snippets);
+        scenario.renderedPrompt = validation.preview.renderedPrompt;
+        scenario.renderedEvaluationPrompt = validation.evaluationPreview.renderedPrompt;
         setState((current) => ({
           ...current,
           scenarios: [...current.scenarios, scenario]
@@ -500,14 +589,24 @@ export function StudioProvider({ children }: PropsWithChildren) {
       getScenarioUsageForSnippet: (snippetId) =>
         state.scenarios
           .flatMap((scenario) =>
-            scenario.snippetBindings
-              .filter((binding) => binding.snippetId === snippetId)
-              .map((binding) => ({
-                scenarioId: scenario.id,
-                scenarioName: scenario.name,
-                pinnedVersion: binding.pinnedVersion ?? 0,
-                updatedAt: scenario.updatedAt
-              }))
+            [
+              ...scenario.personaBindings
+                .filter((binding) => binding.snippetId === snippetId)
+                .map((binding) => ({
+                  scenarioId: scenario.id,
+                  scenarioName: scenario.name,
+                  pinnedVersion: binding.pinnedVersion ?? 0,
+                  updatedAt: scenario.updatedAt
+                })),
+              ...scenario.snippetBindings
+                .filter((binding) => binding.snippetId === snippetId)
+                .map((binding) => ({
+                  scenarioId: scenario.id,
+                  scenarioName: scenario.name,
+                  pinnedVersion: binding.pinnedVersion ?? 0,
+                  updatedAt: scenario.updatedAt
+                }))
+            ]
           )
           .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
       saveTemplateDraft: (templateId, nextTemplate, status) => {
@@ -565,6 +664,12 @@ export function StudioProvider({ children }: PropsWithChildren) {
               variants: cloneTemplateVariants(snapshot.variants),
               slots: cloneTemplateSlots(snapshot.slots),
               localBlocks: cloneLocalBlocks(snapshot.localBlocks),
+              supportedLanguages: cloneLanguages(snapshot.supportedLanguages),
+              defaultLanguage: snapshot.defaultLanguage,
+              evaluationBody: snapshot.evaluationBody,
+              evaluationDimensions: cloneEvaluationDimensionDefinitions(
+                snapshot.evaluationDimensions
+              ),
               testCases: cloneTestCases(snapshot.testCases),
               version: nextVersion,
               updatedAt: new Date().toISOString(),
@@ -602,11 +707,13 @@ export function StudioProvider({ children }: PropsWithChildren) {
               return scenario;
             }
             const nextVersion = scenario.version + 1;
-            const preview = renderScenarioPreview(template, syncedScenario, current.snippets);
+            const preview = validation.preview;
+            const evaluationPreview = validation.evaluationPreview;
             const updatedScenario: Scenario = {
               ...syncedScenario,
               status,
               renderedPrompt: preview.renderedPrompt,
+              renderedEvaluationPrompt: evaluationPreview.renderedPrompt,
               version: nextVersion,
               updatedAt: new Date().toISOString(),
               updatedBy: current.currentRole === "admin" ? "Admin User" : "Editor User"
@@ -649,12 +756,18 @@ export function StudioProvider({ children }: PropsWithChildren) {
               status: snapshot.status,
               templateId: snapshot.templateId,
               templateVersion: snapshot.templateVersion,
+              language: snapshot.language,
               variableValues: { ...snapshot.variableValues },
+              evaluationDimensions: cloneScenarioEvaluationDimensions(
+                snapshot.evaluationDimensions
+              ),
+              personaBindings: cloneScenarioPersonaBindings(snapshot.personaBindings),
               variantSnippetBindings: cloneScenarioVariantBindings(
                 snapshot.variantSnippetBindings
               ),
               snippetBindings: cloneScenarioSlotBindings(snapshot.snippetBindings),
               renderedPrompt: snapshot.renderedPrompt,
+              renderedEvaluationPrompt: snapshot.renderedEvaluationPrompt,
               version: nextVersion,
               updatedAt: new Date().toISOString(),
               updatedBy: current.currentRole === "admin" ? "Admin User" : "Editor User",
@@ -793,7 +906,14 @@ export function createEmptyTemplate(): PromptTemplate {
     description: "New prompt template",
     status: "draft",
     templateMode: "visual",
-    body: ["Describe the scenario goal here.", "", "{{slot:instruction}}"].join("\n"),
+    body: [
+      "Describe the scenario goal here.",
+      "",
+      "Scenario personas:",
+      "{{personas}}",
+      "",
+      "{{slot:instruction}}"
+    ].join("\n"),
     variableSchema: [
       {
         key: "primary_goal",
@@ -816,6 +936,25 @@ export function createEmptyTemplate(): PromptTemplate {
       }
     ],
     localBlocks: [],
+    supportedLanguages: ["en", "zh"],
+    defaultLanguage: "en",
+    evaluationBody: [
+      "Review the conversation against the configured evaluation dimensions.",
+      "",
+      "Scenario language: {{language}}",
+      "",
+      "{{evaluation_dimensions}}"
+    ].join("\n"),
+    evaluationDimensions: [
+      {
+        id: "dimension-language-compliance",
+        key: "language_compliance",
+        label: "Language Compliance",
+        description: "Checks whether the assistant stayed in the required scenario language.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      }
+    ],
     testCases: [],
     version: 1,
     updatedAt: now,

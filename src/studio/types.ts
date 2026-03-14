@@ -2,7 +2,16 @@ export type UserRole = "editor" | "admin";
 
 export type EntityStatus = "draft" | "ready";
 export type TemplateMode = "visual" | "structured" | "raw";
-export type SnippetType = "role" | "instruction" | "format" | "safety" | "tone";
+export type LanguageCode = "en" | "zh" | "es" | "ja";
+export type SnippetType =
+  | "persona"
+  | "role"
+  | "instruction"
+  | "format"
+  | "safety"
+  | "tone"
+  | "evaluation_instruction"
+  | "evaluation_rubric";
 export type SnippetStatus = "active" | "deprecated";
 export type VariableType = "text" | "select" | "boolean" | "json";
 export type VariantFieldType = "dropdown" | "input" | "creatable_select" | "snippet";
@@ -75,11 +84,31 @@ export interface LocalBlock {
   conditionRule?: ConditionRule;
 }
 
+export interface EvaluationDimensionDefinition {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  enabledByDefault: boolean;
+  defaultWeight?: number;
+}
+
+export interface ScenarioEvaluationDimension {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  weight?: number;
+}
+
 export interface TemplateTestCase {
   id: string;
   name: string;
   templateVersion: number;
+  language: LanguageCode;
   variableValues: Record<string, string | boolean>;
+  evaluationDimensions: ScenarioEvaluationDimension[];
+  personaBindings: ScenarioPersonaBinding[];
   variantSnippetBindings: ScenarioVariantSnippetBinding[];
   snippetBindings: ScenarioSlotBinding[];
 }
@@ -93,6 +122,10 @@ export interface PromptTemplateVersion {
   variants: TemplateVariantDefinition[];
   slots: TemplateSlotDefinition[];
   localBlocks: LocalBlock[];
+  supportedLanguages: LanguageCode[];
+  defaultLanguage: LanguageCode;
+  evaluationBody: string;
+  evaluationDimensions: EvaluationDimensionDefinition[];
   testCases: TemplateTestCase[];
   updatedAt: string;
   updatedBy: string;
@@ -111,6 +144,10 @@ export interface PromptTemplate {
   variants: TemplateVariantDefinition[];
   slots: TemplateSlotDefinition[];
   localBlocks: LocalBlock[];
+  supportedLanguages: LanguageCode[];
+  defaultLanguage: LanguageCode;
+  evaluationBody: string;
+  evaluationDimensions: EvaluationDimensionDefinition[];
   testCases: TemplateTestCase[];
   version: number;
   updatedAt: string;
@@ -130,15 +167,25 @@ export interface ScenarioVariantSnippetBinding {
   pinnedVersion?: number;
 }
 
+export interface ScenarioPersonaBinding {
+  id: string;
+  snippetId?: string;
+  pinnedVersion?: number;
+}
+
 export interface ScenarioVersion {
   version: number;
   status: EntityStatus;
   templateId: string;
   templateVersion: number;
+  language: LanguageCode;
   variableValues: Record<string, string | boolean>;
+  evaluationDimensions: ScenarioEvaluationDimension[];
+  personaBindings: ScenarioPersonaBinding[];
   variantSnippetBindings: ScenarioVariantSnippetBinding[];
   snippetBindings: ScenarioSlotBinding[];
   renderedPrompt: string;
+  renderedEvaluationPrompt: string;
   updatedAt: string;
   updatedBy: string;
   notes: string;
@@ -151,10 +198,14 @@ export interface Scenario {
   templateId: string;
   templateVersion: number;
   status: EntityStatus;
+  language: LanguageCode;
   variableValues: Record<string, string | boolean>;
+  evaluationDimensions: ScenarioEvaluationDimension[];
+  personaBindings: ScenarioPersonaBinding[];
   variantSnippetBindings: ScenarioVariantSnippetBinding[];
   snippetBindings: ScenarioSlotBinding[];
   renderedPrompt: string;
+  renderedEvaluationPrompt: string;
   version: number;
   updatedAt: string;
   updatedBy: string;

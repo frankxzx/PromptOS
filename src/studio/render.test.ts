@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initialStudioState } from "./mockData";
 import {
+  renderEvaluationPreview,
   renderScenarioPreview,
   resolveTemplateVersion,
   validateScenario,
@@ -15,6 +16,9 @@ describe("scenario rendering", () => {
   it("uses the pinned snippet version selected by the scenario", () => {
     const preview = renderScenarioPreview(template, scenario, snippets);
 
+    expect(preview.renderedPrompt).toContain("All assistant replies must be in English.");
+    expect(preview.renderedPrompt).toContain("Persona 1:");
+    expect(preview.renderedPrompt).toContain("Name: Aiko");
     expect(preview.renderedPrompt).toContain(
       "Protect narrative consistency and keep the exchange safe."
     );
@@ -135,6 +139,54 @@ describe("scenario rendering", () => {
     expect(result.errors).toEqual(
       expect.arrayContaining([
         expect.stringContaining('Body references unknown field "role_name_error".')
+      ])
+    );
+  });
+
+  it("requires the dialogue template to include personas and evaluation structure", () => {
+    const result = validateTemplateStructure(
+      {
+        ...template,
+        body: "Context only",
+        evaluationBody: "",
+        supportedLanguages: [],
+        defaultLanguage: "en"
+      },
+      snippets
+    );
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Dialogue prompt must include the "{{personas}}" placeholder.'),
+        expect.stringContaining("Evaluation prompt structure is required."),
+        expect.stringContaining("At least one supported language is required.")
+      ])
+    );
+  });
+
+  it("renders evaluation preview from enabled dimensions and scenario language", () => {
+    const preview = renderEvaluationPreview(template, scenario);
+
+    expect(preview.renderedPrompt).toContain(
+      "Evaluate whether the assistant kept the conversation in English."
+    );
+    expect(preview.renderedPrompt).toContain("Language Compliance");
+    expect(preview.renderedPrompt).toContain("Policy Compliance");
+  });
+
+  it("rejects a scenario language that the template does not support", () => {
+    const result = validateScenario(
+      template,
+      {
+        ...scenario,
+        language: "ja"
+      },
+      snippets
+    );
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Language "ja" is not supported by the template.')
       ])
     );
   });

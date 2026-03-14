@@ -181,6 +181,7 @@ export function SnippetDetailPage() {
                   onChange={(event) => setType(event.target.value as SnippetType)}
                 >
                   <option value="role">Role</option>
+                  <option value="persona">Persona</option>
                   <option value="instruction">Instruction</option>
                   <option value="format">Format</option>
                   <option value="safety">Safety</option>

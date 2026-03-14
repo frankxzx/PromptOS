@@ -2,6 +2,54 @@ import type { PromptTemplate, Scenario, Snippet, StudioState } from "./types";
 
 const snippets: Snippet[] = [
   {
+    id: "snippet-persona-host-aiko",
+    name: "Aiko, Calm Host",
+    type: "persona",
+    description: "A culturally grounded, calm host persona with measured language.",
+    status: "active",
+    usageCount: 1,
+    currentVersion: 1,
+    versions: [
+      {
+        version: 1,
+        content: [
+          "Name: Aiko",
+          "Personality: calm, precise, emotionally controlled.",
+          "Cultural background: Japanese urban professional with strong etiquette norms.",
+          "Communication style: polite, indirect, steady, and respectful.",
+          "Behavior boundary: never become confrontational or chaotic."
+        ].join("\n"),
+        createdAt: "2026-03-02T08:00:00.000Z",
+        createdBy: "Mina",
+        notes: "Primary host persona."
+      }
+    ]
+  },
+  {
+    id: "snippet-persona-advisor-mateo",
+    name: "Mateo, Direct Advisor",
+    type: "persona",
+    description: "A pragmatic supporting persona with clear decision framing.",
+    status: "active",
+    usageCount: 1,
+    currentVersion: 1,
+    versions: [
+      {
+        version: 1,
+        content: [
+          "Name: Mateo",
+          "Personality: pragmatic, decisive, commercially aware.",
+          "Cultural background: multilingual insurance advisor used to high-pressure tradeoffs.",
+          "Communication style: direct, concise, confident.",
+          "Behavior boundary: stay factual and avoid manipulative pressure."
+        ].join("\n"),
+        createdAt: "2026-03-03T08:00:00.000Z",
+        createdBy: "Avery",
+        notes: "Supporting advisor persona."
+      }
+    ]
+  },
+  {
     id: "snippet-role-moderator",
     name: "Moderator Persona",
     type: "role",
@@ -154,6 +202,8 @@ const templates: PromptTemplate[] = [
       "Context for role: {{role_name}}",
       "Moderation style: {{moderation_style}}",
       "",
+      "{{personas}}",
+      "",
       "{{slot:role}}",
       "",
       "{{slot:tone}}",
@@ -271,17 +321,88 @@ const templates: PromptTemplate[] = [
       }
     ],
     localBlocks: [],
+    supportedLanguages: ["en", "zh"],
+    defaultLanguage: "en",
+    evaluationBody: [
+      "Review the realtime conversation for policy compliance, flow quality, and language control.",
+      "",
+      "Required language: {{language}}",
+      "",
+      "{{evaluation_dimensions}}"
+    ].join("\n"),
+    evaluationDimensions: [
+      {
+        id: "dimension-language-compliance",
+        key: "language_compliance",
+        label: "Language Compliance",
+        description: "Checks whether the assistant stayed in the required scenario language.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      },
+      {
+        id: "dimension-policy-compliance",
+        key: "policy_compliance",
+        label: "Policy Compliance",
+        description: "Checks whether the assistant followed the configured safety policy.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      },
+      {
+        id: "dimension-conversation-quality",
+        key: "conversation_quality",
+        label: "Conversation Quality",
+        description: "Checks clarity, flow, and responsiveness in the conversation.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      }
+    ],
     testCases: [
       {
         id: "test-live-host-default",
         name: "Default host flow",
         templateVersion: 2,
+        language: "en",
         variableValues: {
           role_name: "Host",
           response_format: "json",
           include_guardrail: true,
           moderation_style: "balanced"
         },
+        personaBindings: [
+          {
+            id: "persona-binding-aiko",
+            snippetId: "snippet-persona-host-aiko",
+            pinnedVersion: 1
+          },
+          {
+            id: "persona-binding-mateo",
+            snippetId: "snippet-persona-advisor-mateo",
+            pinnedVersion: 1
+          }
+        ],
+        evaluationDimensions: [
+          {
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the assistant stayed in the required scenario language.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "policy_compliance",
+            label: "Policy Compliance",
+            description: "Checks whether the assistant followed the configured safety policy.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "conversation_quality",
+            label: "Conversation Quality",
+            description: "Checks clarity, flow, and responsiveness in the conversation.",
+            enabled: true,
+            weight: 1
+          }
+        ],
         variantSnippetBindings: [
           {
             key: "tone_override",
@@ -342,6 +463,41 @@ const templates: PromptTemplate[] = [
           }
         ],
         localBlocks: [],
+        supportedLanguages: ["en", "zh"],
+        defaultLanguage: "en",
+        evaluationBody: [
+          "Review the realtime conversation for policy compliance, flow quality, and language control.",
+          "",
+          "Required language: {{language}}",
+          "",
+          "{{evaluation_dimensions}}"
+        ].join("\n"),
+        evaluationDimensions: [
+          {
+            id: "dimension-language-compliance",
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the assistant stayed in the required scenario language.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          },
+          {
+            id: "dimension-policy-compliance",
+            key: "policy_compliance",
+            label: "Policy Compliance",
+            description: "Checks whether the assistant followed the configured safety policy.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          },
+          {
+            id: "dimension-conversation-quality",
+            key: "conversation_quality",
+            label: "Conversation Quality",
+            description: "Checks clarity, flow, and responsiveness in the conversation.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          }
+        ],
         testCases: [],
         updatedAt: "2026-03-04T09:30:00.000Z",
         updatedBy: "Avery",
@@ -352,6 +508,8 @@ const templates: PromptTemplate[] = [
         body: [
           "Context for role: {{role_name}}",
           "Moderation style: {{moderation_style}}",
+          "",
+          "{{personas}}",
           "",
           "{{slot:role}}",
           "",
@@ -471,17 +629,88 @@ const templates: PromptTemplate[] = [
           }
         ],
         localBlocks: [],
+        supportedLanguages: ["en", "zh"],
+        defaultLanguage: "en",
+        evaluationBody: [
+          "Review the realtime conversation for policy compliance, flow quality, and language control.",
+          "",
+          "Required language: {{language}}",
+          "",
+          "{{evaluation_dimensions}}"
+        ].join("\n"),
+        evaluationDimensions: [
+          {
+            id: "dimension-language-compliance",
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the assistant stayed in the required scenario language.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          },
+          {
+            id: "dimension-policy-compliance",
+            key: "policy_compliance",
+            label: "Policy Compliance",
+            description: "Checks whether the assistant followed the configured safety policy.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          },
+          {
+            id: "dimension-conversation-quality",
+            key: "conversation_quality",
+            label: "Conversation Quality",
+            description: "Checks clarity, flow, and responsiveness in the conversation.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          }
+        ],
         testCases: [
           {
             id: "test-live-host-default",
             name: "Default host flow",
             templateVersion: 2,
+            language: "en",
             variableValues: {
               role_name: "Host",
               response_format: "json",
               include_guardrail: true,
               moderation_style: "balanced"
             },
+            personaBindings: [
+              {
+                id: "persona-binding-aiko",
+                snippetId: "snippet-persona-host-aiko",
+                pinnedVersion: 1
+              },
+              {
+                id: "persona-binding-mateo",
+                snippetId: "snippet-persona-advisor-mateo",
+                pinnedVersion: 1
+              }
+            ],
+            evaluationDimensions: [
+              {
+                key: "language_compliance",
+                label: "Language Compliance",
+                description: "Checks whether the assistant stayed in the required scenario language.",
+                enabled: true,
+                weight: 1
+              },
+              {
+                key: "policy_compliance",
+                label: "Policy Compliance",
+                description: "Checks whether the assistant followed the configured safety policy.",
+                enabled: true,
+                weight: 1
+              },
+              {
+                key: "conversation_quality",
+                label: "Conversation Quality",
+                description: "Checks clarity, flow, and responsiveness in the conversation.",
+                enabled: true,
+                weight: 1
+              }
+            ],
             variantSnippetBindings: [
               {
                 key: "tone_override",
@@ -529,6 +758,8 @@ const templates: PromptTemplate[] = [
     body: [
       "Character under review: {{character_name}}",
       "Brief depth: {{brief_depth}}",
+      "",
+      "{{personas}}",
       "",
       "{{slot:role}}",
       "",
@@ -596,16 +827,82 @@ const templates: PromptTemplate[] = [
       }
     ],
     localBlocks: [],
+    supportedLanguages: ["en", "zh", "ja"],
+    defaultLanguage: "en",
+    evaluationBody: [
+      "Evaluate the generated character brief for instruction quality and decision framing.",
+      "",
+      "Required language: {{language}}",
+      "",
+      "{{evaluation_dimensions}}"
+    ].join("\n"),
+    evaluationDimensions: [
+      {
+        id: "dimension-language-compliance-brief",
+        key: "language_compliance",
+        label: "Language Compliance",
+        description: "Checks whether the brief stayed in the required scenario language.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      },
+      {
+        id: "dimension-instruction-following",
+        key: "instruction_following",
+        label: "Instruction Following",
+        description: "Checks whether the brief follows the scenario constraints.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      },
+      {
+        id: "dimension-decision-quality",
+        key: "decision_quality",
+        label: "Decision Quality",
+        description: "Checks whether motivations and choices are coherent and useful.",
+        enabledByDefault: true,
+        defaultWeight: 1
+      }
+    ],
     testCases: [
       {
         id: "test-character-brief-default",
         name: "Default brief flow",
         templateVersion: 1,
+        language: "en",
         variableValues: {
           character_name: "Luna",
           brief_depth: "standard",
           brief_note: "Keep it production-ready"
         },
+        personaBindings: [
+          {
+            id: "persona-binding-aiko-brief",
+            snippetId: "snippet-persona-host-aiko",
+            pinnedVersion: 1
+          }
+        ],
+        evaluationDimensions: [
+          {
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the brief stayed in the required scenario language.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "instruction_following",
+            label: "Instruction Following",
+            description: "Checks whether the brief follows the scenario constraints.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "decision_quality",
+            label: "Decision Quality",
+            description: "Checks whether motivations and choices are coherent and useful.",
+            enabled: true,
+            weight: 1
+          }
+        ],
         variantSnippetBindings: [],
         snippetBindings: [
           {
@@ -630,6 +927,8 @@ const templates: PromptTemplate[] = [
         body: [
           "Character under review: {{character_name}}",
           "Brief depth: {{brief_depth}}",
+          "",
+          "{{personas}}",
           "",
           "{{slot:role}}",
           "",
@@ -699,16 +998,82 @@ const templates: PromptTemplate[] = [
           }
         ],
         localBlocks: [],
+        supportedLanguages: ["en", "zh", "ja"],
+        defaultLanguage: "en",
+        evaluationBody: [
+          "Evaluate the generated character brief for instruction quality and decision framing.",
+          "",
+          "Required language: {{language}}",
+          "",
+          "{{evaluation_dimensions}}"
+        ].join("\n"),
+        evaluationDimensions: [
+          {
+            id: "dimension-language-compliance-brief",
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the brief stayed in the required scenario language.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          },
+          {
+            id: "dimension-instruction-following",
+            key: "instruction_following",
+            label: "Instruction Following",
+            description: "Checks whether the brief follows the scenario constraints.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          },
+          {
+            id: "dimension-decision-quality",
+            key: "decision_quality",
+            label: "Decision Quality",
+            description: "Checks whether motivations and choices are coherent and useful.",
+            enabledByDefault: true,
+            defaultWeight: 1
+          }
+        ],
         testCases: [
           {
             id: "test-character-brief-default",
             name: "Default brief flow",
             templateVersion: 1,
+            language: "en",
             variableValues: {
               character_name: "Luna",
               brief_depth: "standard",
               brief_note: "Keep it production-ready"
             },
+            personaBindings: [
+              {
+                id: "persona-binding-aiko-brief",
+                snippetId: "snippet-persona-host-aiko",
+                pinnedVersion: 1
+              }
+            ],
+            evaluationDimensions: [
+              {
+                key: "language_compliance",
+                label: "Language Compliance",
+                description: "Checks whether the brief stayed in the required scenario language.",
+                enabled: true,
+                weight: 1
+              },
+              {
+                key: "instruction_following",
+                label: "Instruction Following",
+                description: "Checks whether the brief follows the scenario constraints.",
+                enabled: true,
+                weight: 1
+              },
+              {
+                key: "decision_quality",
+                label: "Decision Quality",
+                description: "Checks whether motivations and choices are coherent and useful.",
+                enabled: true,
+                weight: 1
+              }
+            ],
             variantSnippetBindings: [],
             snippetBindings: [
               {
@@ -740,12 +1105,48 @@ const scenarios: Scenario[] = [
     templateId: "template-live-host",
     templateVersion: 2,
     status: "ready",
+    language: "en",
     variableValues: {
       role_name: "Host",
       response_format: "json",
       include_guardrail: true,
       moderation_style: "balanced"
     },
+    personaBindings: [
+      {
+        id: "scenario-persona-aiko",
+        snippetId: "snippet-persona-host-aiko",
+        pinnedVersion: 1
+      },
+      {
+        id: "scenario-persona-mateo",
+        snippetId: "snippet-persona-advisor-mateo",
+        pinnedVersion: 1
+      }
+    ],
+    evaluationDimensions: [
+      {
+        key: "language_compliance",
+        label: "Language Compliance",
+        description: "Checks whether the assistant stayed in the required scenario language.",
+        enabled: true,
+        weight: 1
+      },
+      {
+        key: "policy_compliance",
+        label: "Policy Compliance",
+        description: "Checks whether the assistant followed the configured safety policy.",
+        enabled: true,
+        weight: 1
+      },
+      {
+        key: "conversation_quality",
+        label: "Conversation Quality",
+        description: "Checks clarity, flow, and responsiveness in the conversation.",
+        enabled: true,
+        weight: 1
+      }
+    ],
     variantSnippetBindings: [
       {
         key: "tone_override",
@@ -781,6 +1182,7 @@ const scenarios: Scenario[] = [
       }
     ],
     renderedPrompt: "",
+    renderedEvaluationPrompt: "",
     version: 1,
     updatedAt: "2026-03-08T13:00:00.000Z",
     updatedBy: "Avery",
@@ -790,12 +1192,48 @@ const scenarios: Scenario[] = [
         status: "ready",
         templateId: "template-live-host",
         templateVersion: 2,
+        language: "en",
         variableValues: {
           role_name: "Host",
           response_format: "json",
           include_guardrail: true,
           moderation_style: "balanced"
         },
+        personaBindings: [
+          {
+            id: "scenario-persona-aiko",
+            snippetId: "snippet-persona-host-aiko",
+            pinnedVersion: 1
+          },
+          {
+            id: "scenario-persona-mateo",
+            snippetId: "snippet-persona-advisor-mateo",
+            pinnedVersion: 1
+          }
+        ],
+        evaluationDimensions: [
+          {
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the assistant stayed in the required scenario language.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "policy_compliance",
+            label: "Policy Compliance",
+            description: "Checks whether the assistant followed the configured safety policy.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "conversation_quality",
+            label: "Conversation Quality",
+            description: "Checks clarity, flow, and responsiveness in the conversation.",
+            enabled: true,
+            weight: 1
+          }
+        ],
         variantSnippetBindings: [
           {
             key: "tone_override",
@@ -831,6 +1269,7 @@ const scenarios: Scenario[] = [
           }
         ],
         renderedPrompt: "",
+        renderedEvaluationPrompt: "",
         updatedAt: "2026-03-08T13:00:00.000Z",
         updatedBy: "Avery",
         notes: "Initial ready scenario."
@@ -844,11 +1283,42 @@ const scenarios: Scenario[] = [
     templateId: "template-character-brief",
     templateVersion: 1,
     status: "draft",
+    language: "en",
     variableValues: {
       character_name: "Luna",
       brief_depth: "standard",
       brief_note: "Keep it production-ready"
     },
+    personaBindings: [
+      {
+        id: "scenario-persona-aiko-brief",
+        snippetId: "snippet-persona-host-aiko",
+        pinnedVersion: 1
+      }
+    ],
+    evaluationDimensions: [
+      {
+        key: "language_compliance",
+        label: "Language Compliance",
+        description: "Checks whether the brief stayed in the required scenario language.",
+        enabled: true,
+        weight: 1
+      },
+      {
+        key: "instruction_following",
+        label: "Instruction Following",
+        description: "Checks whether the brief follows the scenario constraints.",
+        enabled: true,
+        weight: 1
+      },
+      {
+        key: "decision_quality",
+        label: "Decision Quality",
+        description: "Checks whether motivations and choices are coherent and useful.",
+        enabled: true,
+        weight: 1
+      }
+    ],
     variantSnippetBindings: [],
     snippetBindings: [
       {
@@ -863,6 +1333,7 @@ const scenarios: Scenario[] = [
       }
     ],
     renderedPrompt: "",
+    renderedEvaluationPrompt: "",
     version: 1,
     updatedAt: "2026-03-08T14:00:00.000Z",
     updatedBy: "Mina",
@@ -872,11 +1343,42 @@ const scenarios: Scenario[] = [
         status: "draft",
         templateId: "template-character-brief",
         templateVersion: 1,
+        language: "en",
         variableValues: {
           character_name: "Luna",
           brief_depth: "standard",
           brief_note: "Keep it production-ready"
         },
+        personaBindings: [
+          {
+            id: "scenario-persona-aiko-brief",
+            snippetId: "snippet-persona-host-aiko",
+            pinnedVersion: 1
+          }
+        ],
+        evaluationDimensions: [
+          {
+            key: "language_compliance",
+            label: "Language Compliance",
+            description: "Checks whether the brief stayed in the required scenario language.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "instruction_following",
+            label: "Instruction Following",
+            description: "Checks whether the brief follows the scenario constraints.",
+            enabled: true,
+            weight: 1
+          },
+          {
+            key: "decision_quality",
+            label: "Decision Quality",
+            description: "Checks whether motivations and choices are coherent and useful.",
+            enabled: true,
+            weight: 1
+          }
+        ],
         variantSnippetBindings: [],
         snippetBindings: [
           {
@@ -891,6 +1393,7 @@ const scenarios: Scenario[] = [
           }
         ],
         renderedPrompt: "",
+        renderedEvaluationPrompt: "",
         updatedAt: "2026-03-08T14:00:00.000Z",
         updatedBy: "Mina",
         notes: "Initial draft."

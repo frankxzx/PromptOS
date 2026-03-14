@@ -3,13 +3,21 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { createEditableScenario, useStudio } from "../../studio/StudioContext";
 import {
   getTemplateInputSchema,
+  renderEvaluationPreview,
   renderScenarioPreview,
   resolveTemplateVersion
 } from "../../studio/render";
 import { syncScenarioToTemplateVersion } from "../../studio/operations";
-import type { PromptTemplate, Scenario } from "../../studio/types";
+import type { LanguageCode, PromptTemplate, Scenario } from "../../studio/types";
 
 type ToastState = { tone: "success" | "error"; message: string } | null;
+
+const LANGUAGE_LABELS: Record<LanguageCode, string> = {
+  en: "English",
+  zh: "Chinese",
+  es: "Spanish",
+  ja: "Japanese"
+};
 
 export function ScenarioEditorPage() {
   const { scenarioId } = useParams();
@@ -50,7 +58,14 @@ export function ScenarioEditorPage() {
     return renderScenarioPreview(template, draft, snippets);
   }, [draft, snippets, template]);
 
-  if (!sourceScenario || !draft || !template || !resolvedTemplate || !preview) {
+  const evaluationPreview = useMemo(() => {
+    if (!draft || !template) {
+      return null;
+    }
+    return renderEvaluationPreview(template, draft);
+  }, [draft, template]);
+
+  if (!sourceScenario || !draft || !template || !resolvedTemplate || !preview || !evaluationPreview) {
     return (
       <section className="page-shell">
         <p>Scenario not found.</p>
@@ -66,6 +81,17 @@ export function ScenarioEditorPage() {
   const fieldVariantsByKey = new Map(
     resolvedTemplate.variants.map((variant) => [variant.key, variant])
   );
+  const selectedPersonaCards = activeScenario.personaBindings.map((binding, index) => {
+    const snippet = snippets.find((item) => item.id === binding.snippetId);
+    const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
+    return {
+      id: binding.id,
+      label: `Persona ${index + 1}`,
+      snippetName: snippet?.name ?? "Missing persona",
+      pinnedVersion: binding.pinnedVersion,
+      content: version?.content ?? "Persona content unavailable."
+    };
+  });
 
   function updateDraft(nextScenario: Scenario) {
     setDraft(nextScenario);
@@ -154,6 +180,74 @@ export function ScenarioEditorPage() {
     });
   }
 
+  function addPersona() {
+    const defaultPersona = snippets.find((item) => item.type === "persona");
+    updateDraft({
+      ...activeScenario,
+      personaBindings: [
+        ...activeScenario.personaBindings,
+        {
+          id: `persona-binding-${Date.now()}`,
+          snippetId: defaultPersona?.id,
+          pinnedVersion: defaultPersona?.currentVersion
+        }
+      ]
+    });
+  }
+
+  function updatePersona(index: number, snippetId: string) {
+    if (!snippetId) {
+      updateDraft({
+        ...activeScenario,
+        personaBindings: activeScenario.personaBindings.filter(
+          (_, itemIndex) => itemIndex !== index
+        )
+      });
+      return;
+    }
+    const snippet = snippets.find((item) => item.id === snippetId);
+    if (!snippet) {
+      return;
+    }
+    updateDraft({
+      ...activeScenario,
+      personaBindings: activeScenario.personaBindings.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              snippetId,
+              pinnedVersion: snippet.currentVersion
+            }
+          : item
+      )
+    });
+  }
+
+  function updatePersonaVersion(index: number, version: number) {
+    updateDraft({
+      ...activeScenario,
+      personaBindings: activeScenario.personaBindings.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, pinnedVersion: version } : item
+      )
+    });
+  }
+
+  function movePersona(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= activeScenario.personaBindings.length) {
+      return;
+    }
+    const nextBindings = [...activeScenario.personaBindings];
+    [nextBindings[index], nextBindings[nextIndex]] = [
+      nextBindings[nextIndex],
+      nextBindings[index]
+    ];
+    updateDraft({
+      ...activeScenario,
+      personaBindings: nextBindings
+    });
+  }
+
   function save(status: "draft" | "ready") {
     const result = saveScenarioDraft(persistedScenario.id, activeScenario, status);
     if (result.ok) {
@@ -164,6 +258,18 @@ export function ScenarioEditorPage() {
       return;
     }
     setToast({ tone: "error", message: result.errors.join(" ") });
+  }
+
+  function updateEvaluationDimension(
+    key: string,
+    updates: Partial<Scenario["evaluationDimensions"][number]>
+  ) {
+    updateDraft({
+      ...activeScenario,
+      evaluationDimensions: activeScenario.evaluationDimensions.map((item) =>
+        item.key === key ? { ...item, ...updates } : item
+      )
+    });
   }
 
   return (
@@ -246,7 +352,25 @@ export function ScenarioEditorPage() {
                     <option key={version.version} value={version.version}>
                       v{version.version}
                     </option>
-                  ))}
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-label">Scenario language</span>
+              <select
+                value={activeScenario.language}
+                onChange={(event) =>
+                  updateDraft({
+                    ...activeScenario,
+                    language: event.target.value as LanguageCode
+                  })
+                }
+              >
+                {resolvedTemplate.supportedLanguages.map((language) => (
+                  <option key={language} value={language}>
+                    {LANGUAGE_LABELS[language]}
+                  </option>
+                ))}
               </select>
             </label>
             <p className="muted-copy">Template: {activeTemplate.name}</p>
@@ -338,6 +462,96 @@ export function ScenarioEditorPage() {
             ))}
           </section>
 
+          <section className="panel">
+            <div className="panel-header-row">
+              <div>
+                <h3>Persona cards</h3>
+                <p className="muted-copy">
+                  Persona snippets shape the dialogue voice, background, and behavior.
+                </p>
+              </div>
+              <button type="button" className="secondary-button" onClick={addPersona}>
+                Add persona
+              </button>
+            </div>
+            {activeScenario.personaBindings.length === 0 ? (
+              <p className="muted-copy">
+                No persona cards selected. Add one if this scenario uses{" "}
+                <code>{"{{personas}}"}</code>.
+              </p>
+            ) : (
+              <div className="stack-list">
+                {activeScenario.personaBindings.map((binding, index) => {
+                  const personaSnippets = snippets.filter((item) => item.type === "persona");
+                  const selectedSnippet = personaSnippets.find(
+                    (snippet) => snippet.id === binding.snippetId
+                  );
+
+                  return (
+                    <article key={binding.id} className="nested-card">
+                      <div className="panel-header-row">
+                        <strong>Persona {index + 1}</strong>
+                        <div className="inline-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => movePersona(index, -1)}
+                          >
+                            Up
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => movePersona(index, 1)}
+                          >
+                            Down
+                          </button>
+                        </div>
+                      </div>
+                      <label className="field">
+                        <span className="field-label">Persona snippet</span>
+                        <select
+                          value={binding.snippetId ?? ""}
+                          onChange={(event) => updatePersona(index, event.target.value)}
+                        >
+                          <option value="">Select persona</option>
+                          {personaSnippets.map((snippet) => (
+                            <option key={snippet.id} value={snippet.id}>
+                              {snippet.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span className="field-label">Pinned version</span>
+                        <select
+                          value={binding.pinnedVersion ?? selectedSnippet?.currentVersion ?? ""}
+                          onChange={(event) =>
+                            updatePersonaVersion(index, Number(event.target.value))
+                          }
+                          disabled={!selectedSnippet}
+                        >
+                          {selectedSnippet?.versions.map((version) => (
+                            <option key={version.version} value={version.version}>
+                              v{version.version}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => updatePersona(index, "")}
+                      >
+                        Remove persona
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           {snippetVariants.length > 0 ? (
             <section className="panel">
               <h3>Nested snippet variants</h3>
@@ -397,6 +611,53 @@ export function ScenarioEditorPage() {
                     </article>
                   );
                 })}
+              </div>
+            </section>
+          ) : null}
+
+          {activeScenario.evaluationDimensions.length > 0 ? (
+            <section className="panel">
+              <h3>Evaluation setup</h3>
+              <div className="stack-list">
+                {activeScenario.evaluationDimensions.map((dimension) => (
+                  <article key={dimension.key} className="nested-card">
+                    <div className="panel-header-row">
+                      <div>
+                        <strong>{dimension.label}</strong>
+                        <p className="muted-copy">{dimension.description}</p>
+                      </div>
+                      <span className="version-chip">{dimension.key}</span>
+                    </div>
+                    <label className="field">
+                      <span className="field-label">Enabled</span>
+                      <select
+                        value={String(dimension.enabled)}
+                        onChange={(event) =>
+                          updateEvaluationDimension(dimension.key, {
+                            enabled: event.target.value === "true"
+                          })
+                        }
+                      >
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span className="field-label">Weight</span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={dimension.weight ?? 1}
+                        onChange={(event) =>
+                          updateEvaluationDimension(dimension.key, {
+                            weight: Number(event.target.value) || 1
+                          })
+                        }
+                      />
+                    </label>
+                  </article>
+                ))}
               </div>
             </section>
           ) : null}
@@ -532,7 +793,23 @@ export function ScenarioEditorPage() {
               </div>
             ) : null}
             <div className="preview-block-list">
-              {preview.resolvedBlocks.map((block) => (
+              {selectedPersonaCards.map((card) => (
+                <article key={card.id} className="source-block">
+                  <div className="panel-header-row">
+                    <span className="source-pill">
+                      {card.snippetName}
+                      {card.pinnedVersion ? ` · v${card.pinnedVersion}` : ""}
+                    </span>
+                    <span className="ghost-link">{card.label}</span>
+                  </div>
+                  <pre>{card.content}</pre>
+                </article>
+              ))}
+            </div>
+            <div className="preview-block-list">
+              {preview.resolvedBlocks
+                .filter((block) => !block.slot.startsWith("persona:"))
+                .map((block) => (
                 <article key={block.id} className="source-block">
                   <div className="panel-header-row">
                     <span className="source-pill">
@@ -549,6 +826,10 @@ export function ScenarioEditorPage() {
             <article className="render-output">
               <h4>Rendered prompt</h4>
               <pre>{preview.renderedPrompt}</pre>
+            </article>
+            <article className="render-output">
+              <h4>Rendered evaluation prompt</h4>
+              <pre>{evaluationPreview.renderedPrompt}</pre>
             </article>
           </section>
         </aside>

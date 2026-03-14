@@ -78,6 +78,7 @@ export function SnippetLibraryPage() {
                 onChange={(event) => setCreateType(event.target.value as SnippetType)}
               >
                 <option value="role">Role</option>
+                <option value="persona">Persona</option>
                 <option value="instruction">Instruction</option>
                 <option value="format">Format</option>
                 <option value="safety">Safety</option>
@@ -153,6 +154,7 @@ export function SnippetLibraryPage() {
           >
             <option value="all">All</option>
             <option value="role">Role</option>
+            <option value="persona">Persona</option>
             <option value="instruction">Instruction</option>
             <option value="format">Format</option>
             <option value="safety">Safety</option>
