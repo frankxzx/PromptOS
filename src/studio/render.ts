@@ -1,5 +1,6 @@
 import type {
   ConditionRule,
+  DialoguePromptSections,
   EvaluationDimensionDefinition,
   LanguageCode,
   PromptTemplate,
@@ -31,6 +32,61 @@ const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 };
 
 const PERSONAS_PLACEHOLDER_PATTERN = /\{\{\s*personas\s*\}\}/;
+const SECTION_TITLES: Record<keyof DialoguePromptSections, string> = {
+  roleObjective: "Role & Objective",
+  personas: "Personas",
+  language: "Language",
+  unclearAudio: "Unclear Audio",
+  conversationFlow: "Conversation Flow",
+  responseStyle: "Response Style",
+  tools: "Tools",
+  safetyEscalation: "Safety & Escalation"
+};
+
+export function createDefaultDialogueSections(): DialoguePromptSections {
+  return {
+    roleObjective: "",
+    personas: "{{personas}}",
+    language: "",
+    unclearAudio: "",
+    conversationFlow: "",
+    responseStyle: "",
+    tools: "",
+    safetyEscalation: ""
+  };
+}
+
+export function cloneDialoguePromptSections(
+  sections: DialoguePromptSections | undefined
+): DialoguePromptSections {
+  const defaults = createDefaultDialogueSections();
+  return {
+    roleObjective: sections?.roleObjective ?? defaults.roleObjective,
+    personas: sections?.personas ?? defaults.personas,
+    language: sections?.language ?? defaults.language,
+    unclearAudio: sections?.unclearAudio ?? defaults.unclearAudio,
+    conversationFlow: sections?.conversationFlow ?? defaults.conversationFlow,
+    responseStyle: sections?.responseStyle ?? defaults.responseStyle,
+    tools: sections?.tools ?? defaults.tools,
+    safetyEscalation: sections?.safetyEscalation ?? defaults.safetyEscalation
+  };
+}
+
+export function compileDialoguePromptSections(
+  sections: DialoguePromptSections | undefined
+): string {
+  const resolved = cloneDialoguePromptSections(sections);
+  return (Object.keys(SECTION_TITLES) as Array<keyof DialoguePromptSections>)
+    .map((key) => {
+      const content = resolved[key].trim();
+      if (!content) {
+        return "";
+      }
+      return [`## ${SECTION_TITLES[key]}`, content].join("\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 function cloneTestCases(testCases: TemplateTestCase[] | undefined) {
   return (testCases ?? []).map((item) => ({
@@ -157,6 +213,14 @@ export function hasPersonasPlaceholder(body: string) {
   return PERSONAS_PLACEHOLDER_PATTERN.test(body);
 }
 
+export function getDialoguePromptBody(
+  template: Pick<PromptTemplate, "body" | "dialogueSections"> |
+    Pick<PromptTemplateVersion, "body" | "dialogueSections">
+) {
+  const compiled = compileDialoguePromptSections(template.dialogueSections);
+  return compiled || template.body;
+}
+
 function buildPersonaSection(
   scenario: Scenario,
   snippets: Snippet[],
@@ -273,6 +337,8 @@ export function resolveTemplateVersion(
   if (template.version === version) {
     return {
       ...template,
+      body: getDialoguePromptBody(template),
+      dialogueSections: cloneDialoguePromptSections(template.dialogueSections),
       variableSchema: cloneVariableSchema(template.variableSchema),
       variants: template.variants.map(cloneVariant),
       slots: cloneTemplateSlots(template.slots),
@@ -298,6 +364,7 @@ export function resolveTemplateVersion(
     status: snapshot.status,
     templateMode: snapshot.templateMode,
     body: snapshot.body,
+    dialogueSections: cloneDialoguePromptSections(snapshot.dialogueSections),
     variableSchema: cloneVariableSchema(snapshot.variableSchema),
     variants: snapshot.variants.map(cloneVariant),
     slots: cloneTemplateSlots(snapshot.slots),
@@ -386,8 +453,26 @@ export function validateTemplateStructure(
     errors.push("Dialogue prompt structure is required.");
   }
 
-  if (!hasPersonasPlaceholder(versionTemplate.body)) {
-    errors.push('Dialogue prompt must include the "{{personas}}" placeholder.');
+  if (!versionTemplate.dialogueSections.roleObjective.trim()) {
+    errors.push('Dialogue section "Role & Objective" is required.');
+  }
+  if (!hasPersonasPlaceholder(versionTemplate.dialogueSections.personas)) {
+    errors.push('Dialogue section "Personas" must include the "{{personas}}" placeholder.');
+  }
+  if (!versionTemplate.dialogueSections.language.trim()) {
+    errors.push('Dialogue section "Language" is required.');
+  }
+  if (!versionTemplate.dialogueSections.unclearAudio.trim()) {
+    errors.push('Dialogue section "Unclear Audio" is required.');
+  }
+  if (!versionTemplate.dialogueSections.conversationFlow.trim()) {
+    errors.push('Dialogue section "Conversation Flow" is required.');
+  }
+  if (!versionTemplate.dialogueSections.responseStyle.trim()) {
+    errors.push('Dialogue section "Response Style" is required.');
+  }
+  if (!versionTemplate.dialogueSections.safetyEscalation.trim()) {
+    errors.push('Dialogue section "Safety & Escalation" is required.');
   }
 
   if (!versionTemplate.evaluationBody.trim()) {
@@ -464,8 +549,9 @@ export function validateTemplateStructure(
     }
   });
 
+  const dialogueBody = getDialoguePromptBody(versionTemplate);
   const bodyVariableTokens = Array.from(
-    versionTemplate.body.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
+    dialogueBody.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
   ).map((match) => match[1]);
   bodyVariableTokens.forEach((token) => {
     if (!fieldKeys.has(token) && token !== "personas") {
@@ -473,7 +559,7 @@ export function validateTemplateStructure(
     }
   });
 
-  const slotTokens = Array.from(versionTemplate.body.matchAll(/\{\{slot:([^}]+)\}\}/g)).map(
+  const slotTokens = Array.from(dialogueBody.matchAll(/\{\{slot:([^}]+)\}\}/g)).map(
     (match) => match[1]
   );
   slotTokens.forEach((slot) => {
@@ -677,7 +763,8 @@ export function renderScenarioPreview(
     renderVariables,
     renderWarnings
   );
-  if (hasPersonasPlaceholder(resolvedTemplate.body) && personaSection.blocks.length === 0) {
+  const dialogueBody = getDialoguePromptBody(resolvedTemplate);
+  if (hasPersonasPlaceholder(dialogueBody) && personaSection.blocks.length === 0) {
     renderWarnings.push("Dialogue prompt expects persona cards, but none are configured.");
   }
 
@@ -697,7 +784,7 @@ export function renderScenarioPreview(
       }))
   ];
 
-  let renderedPrompt = interpolateTemplate(resolvedTemplate.body, renderVariables);
+  let renderedPrompt = interpolateTemplate(dialogueBody, renderVariables);
   renderedPrompt = renderedPrompt.replace(/\{\{\s*personas\s*\}\}/g, personaSection.text);
   resolvedTemplate.slots.forEach((slot) => {
     const block = resolvedBlocks.find(

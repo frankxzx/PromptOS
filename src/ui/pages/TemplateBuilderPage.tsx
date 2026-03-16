@@ -8,6 +8,7 @@ import {
 } from "../../studio/StudioContext";
 import { syncScenarioToTemplateVersion } from "../../studio/operations";
 import {
+  compileDialoguePromptSections,
   createTemplateTestScenario,
   getTemplateInputSchema,
   renderEvaluationPreview,
@@ -17,6 +18,7 @@ import {
   validateTemplateStructure
 } from "../../studio/render";
 import type {
+  DialoguePromptSections,
   EvaluationDimensionDefinition,
   LanguageCode,
   PromptTemplate,
@@ -31,32 +33,6 @@ import type {
 } from "../../studio/types";
 
 type ToastState = { tone: "success" | "error"; message: string } | null;
-
-interface BodySegment {
-  id: string;
-  kind: "text" | "slot";
-  value: string;
-}
-
-function parseBodySegments(body: string): BodySegment[] {
-  return body.split(/\n\s*\n/).map((chunk, index) => {
-    const trimmed = chunk.trim();
-    const slotMatch = trimmed.match(/^\{\{slot:([^}]+)\}\}$/);
-    if (slotMatch) {
-      return { id: `segment-slot-${index}`, kind: "slot", value: slotMatch[1] };
-    }
-    return { id: `segment-text-${index}`, kind: "text", value: chunk };
-  });
-}
-
-function composeBodySegments(segments: BodySegment[]) {
-  return segments
-    .map((segment) =>
-      segment.kind === "slot" ? `{{slot:${segment.value}}}` : segment.value.trim()
-    )
-    .filter(Boolean)
-    .join("\n\n");
-}
 
 function createVariant(index: number): TemplateVariantDefinition {
   return {
@@ -100,6 +76,55 @@ const LANGUAGE_OPTIONS: Array<{ value: LanguageCode; label: string }> = [
   { value: "zh", label: "Chinese" },
   { value: "es", label: "Spanish" },
   { value: "ja", label: "Japanese" }
+];
+
+const DIALOGUE_SECTION_FIELDS: Array<{
+  key: keyof DialoguePromptSections;
+  label: string;
+  helper: string;
+  optional?: boolean;
+}> = [
+  {
+    key: "roleObjective",
+    label: "Role & Objective",
+    helper: "Define the agent's realtime objective. You can reference variables and slot placeholders here."
+  },
+  {
+    key: "personas",
+    label: "Personas",
+    helper: 'This section must include {{personas}} so selected persona cards are injected into the dialogue prompt.'
+  },
+  {
+    key: "language",
+    label: "Language",
+    helper: "Keep language policy explicit and separate from persona tone."
+  },
+  {
+    key: "unclearAudio",
+    label: "Unclear Audio",
+    helper: "Tell the model how to recover when audio is incomplete or hard to hear."
+  },
+  {
+    key: "conversationFlow",
+    label: "Conversation Flow",
+    helper: "Describe turn-by-turn pacing, scenario progression, and where task snippets fit."
+  },
+  {
+    key: "responseStyle",
+    label: "Response Style",
+    helper: "Control sentence length, spoken feel, repetition, and realtime pacing."
+  },
+  {
+    key: "tools",
+    label: "Tools",
+    helper: "Optional. Use this only when the dialogue agent has tools or tool preambles to follow.",
+    optional: true
+  },
+  {
+    key: "safetyEscalation",
+    label: "Safety & Escalation",
+    helper: "Define refusal, safe redirect, and handoff behavior."
+  }
 ];
 
 function createEvaluationDimension(index: number): EvaluationDimensionDefinition {
@@ -179,7 +204,6 @@ export function TemplateBuilderPage() {
   const activeTemplate = draft;
   const persistedTemplate = sourceTemplate ?? activeTemplate;
   const activeTestScenario = testScenario;
-  const bodySegments = parseBodySegments(activeTemplate.body);
   const staticValidation = validateTemplateStructure(activeTemplate, snippets);
   const testPreview = renderScenarioPreview(activeTemplate, activeTestScenario, snippets);
   const evaluationPreview = renderEvaluationPreview(activeTemplate, activeTestScenario);
@@ -312,64 +336,18 @@ export function TemplateBuilderPage() {
     setShowRawWarning(false);
   }
 
-  function moveSegment(index: number, direction: -1 | 1) {
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= bodySegments.length) {
-      return;
-    }
-    const nextSegments = [...bodySegments];
-    [nextSegments[index], nextSegments[nextIndex]] = [nextSegments[nextIndex], nextSegments[index]];
-    updateDraft({ ...activeTemplate, body: composeBodySegments(nextSegments) });
-  }
-
-  function updateSegment(index: number, value: string) {
-    const nextSegments = bodySegments.map((segment, segmentIndex) =>
-      segmentIndex === index ? { ...segment, value } : segment
-    );
-    updateDraft({ ...activeTemplate, body: composeBodySegments(nextSegments) });
-  }
-
-  function addTextSegment() {
+  function updateDialogueSection(
+    key: keyof DialoguePromptSections,
+    value: string
+  ) {
+    const nextSections = {
+      ...activeTemplate.dialogueSections,
+      [key]: value
+    };
     updateDraft({
       ...activeTemplate,
-      body: composeBodySegments([
-        ...bodySegments,
-        {
-          id: `segment-text-new-${Date.now()}`,
-          kind: "text",
-          value: "New text block"
-        }
-      ])
-    });
-  }
-
-  function addSlotSegment() {
-    const fallbackSlot =
-      activeTemplate.slots[0]?.slot ?? createSlot(activeTemplate.slots.length + 1).slot;
-    const nextSlots =
-      activeTemplate.slots.length > 0
-        ? activeTemplate.slots
-        : [...activeTemplate.slots, createSlot(activeTemplate.slots.length + 1)];
-    updateDraft({
-      ...activeTemplate,
-      slots: nextSlots,
-      body: composeBodySegments([
-        ...bodySegments,
-        {
-          id: `segment-slot-new-${Date.now()}`,
-          kind: "slot",
-          value: fallbackSlot
-        }
-      ])
-    });
-  }
-
-  function deleteSegment(index: number) {
-    updateDraft({
-      ...activeTemplate,
-      body: composeBodySegments(
-        bodySegments.filter((_, segmentIndex) => segmentIndex !== index)
-      )
+      dialogueSections: nextSections,
+      body: compileDialoguePromptSections(nextSections)
     });
   }
 
@@ -1207,103 +1185,37 @@ export function TemplateBuilderPage() {
           <section className="panel">
             <div className="panel-header-row">
               <div>
-                <h3>Template structure</h3>
+                <h3>Realtime dialogue schema</h3>
                 <p className="muted-copy">
-                  Add ordered blocks here. Text blocks can reference base variables and variants;
-                  slot blocks reference your slot definitions. Use <code>{"{{personas}}"}</code>{" "}
-                  when the dialogue prompt should inject ordered persona cards.
+                  Edit the dialogue prompt as official Realtime-style sections. The final prompt is
+                  compiled below in a fixed order.
                 </p>
               </div>
-              {activeTemplate.templateMode === "visual" ? (
-                <div className="inline-actions">
-                  <button type="button" className="secondary-button" onClick={addTextSegment}>
-                    Add text block
-                  </button>
-                  <button type="button" className="secondary-button" onClick={addSlotSegment}>
-                    Add slot block
-                  </button>
-                </div>
-              ) : null}
             </div>
-            {activeTemplate.templateMode === "visual" ? (
-              <div className="stack-list">
-                {bodySegments.map((segment, index) => (
-                  <article key={segment.id} className="composer-card">
-                    <div className="composer-toolbar">
-                      <span className="composer-tag">
-                        {segment.kind === "slot" ? "Slot placeholder" : "Plain text"}
-                      </span>
-                      <div className="inline-actions">
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => moveSegment(index, -1)}
-                        >
-                          Up
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => moveSegment(index, 1)}
-                        >
-                          Down
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => deleteSegment(index)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                    {segment.kind === "slot" ? (
-                      <label className="field">
-                        <span className="field-label">Slot</span>
-                        <select
-                          value={segment.value}
-                          onChange={(event) => updateSegment(index, event.target.value)}
-                        >
-                          {activeTemplate.slots.length === 0 ? (
-                            <option value="">No slots defined</option>
-                          ) : null}
-                          {activeTemplate.slots.map((slot) => (
-                            <option key={slot.id} value={slot.slot}>
-                              {slot.slot}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : (
-                      <label className="field">
-                        <span className="field-label">Text block</span>
-                        <textarea
-                          rows={4}
-                          value={segment.value}
-                          onChange={(event) => updateSegment(index, event.target.value)}
-                        />
-                      </label>
-                    )}
-                  </article>
-                ))}
-                {bodySegments.length === 0 ? (
-                  <article className="nested-card">
-                    <p className="muted-copy">
-                      No blocks yet. Start by adding a text block or a slot block.
-                    </p>
-                  </article>
-                ) : null}
-              </div>
-            ) : (
-              <label className="field">
-                <span className="field-label">Template body</span>
-                <textarea
-                  rows={20}
-                  value={activeTemplate.body}
-                  onChange={(event) => updateDraft({ ...activeTemplate, body: event.target.value })}
-                />
-              </label>
-            )}
+            <div className="stack-list">
+              {DIALOGUE_SECTION_FIELDS.map((section) => (
+                <article key={section.key} className="nested-card">
+                  <label className="field">
+                    <span className="field-label">
+                      {section.label}
+                      {section.optional ? " (optional)" : " *"}
+                    </span>
+                    <textarea
+                      rows={section.key === "personas" ? 5 : 4}
+                      value={activeTemplate.dialogueSections[section.key]}
+                      onChange={(event) =>
+                        updateDialogueSection(section.key, event.target.value)
+                      }
+                    />
+                  </label>
+                  <p className="muted-copy">{section.helper}</p>
+                </article>
+              ))}
+            </div>
+            <label className="field">
+              <span className="field-label">Compiled dialogue prompt</span>
+              <textarea rows={20} value={activeTemplate.body} readOnly />
+            </label>
           </section>
 
           <section className="panel">

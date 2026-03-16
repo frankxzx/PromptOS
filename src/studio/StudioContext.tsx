@@ -9,6 +9,9 @@ import {
 } from "react";
 import { initialStudioState } from "./mockData";
 import {
+  cloneDialoguePromptSections,
+  compileDialoguePromptSections,
+  createDefaultDialogueSections,
   getTemplateDefaults,
   renderScenarioPreview,
   resolveTemplateVersion,
@@ -17,6 +20,7 @@ import {
 } from "./render";
 import { createScenarioFromTemplate, syncScenarioToTemplateVersion } from "./operations";
 import type {
+  DialoguePromptSections,
   EvaluationDimensionDefinition,
   EntityStatus,
   LanguageCode,
@@ -91,6 +95,17 @@ function cloneTemplateVariants(variants: TemplateVariantDefinition[] | undefined
   return (variants ?? []).map(cloneTemplateVariant);
 }
 
+function ensureDialogueSections(
+  sections: DialoguePromptSections | undefined,
+  body: string
+) {
+  const nextSections = cloneDialoguePromptSections(sections);
+  if (!sections && body) {
+    nextSections.roleObjective = body;
+  }
+  return nextSections;
+}
+
 function cloneTemplateSlot(slot: TemplateSlotDefinition): TemplateSlotDefinition {
   return {
     ...slot,
@@ -163,8 +178,11 @@ function cloneSnippetVersions(versions: SnippetVersion[] | undefined) {
 }
 
 function normalizeTemplate(template: PromptTemplate): PromptTemplate {
+  const dialogueSections = ensureDialogueSections(template.dialogueSections, template.body);
   return {
     ...template,
+    body: compileDialoguePromptSections(dialogueSections) || template.body,
+    dialogueSections,
     variableSchema: cloneVariableSchema(template.variableSchema),
     variants: cloneTemplateVariants(template.variants),
     slots: cloneTemplateSlots(template.slots),
@@ -174,20 +192,25 @@ function normalizeTemplate(template: PromptTemplate): PromptTemplate {
     evaluationBody: template.evaluationBody ?? "",
     evaluationDimensions: cloneEvaluationDimensionDefinitions(template.evaluationDimensions),
     testCases: cloneTestCases(template.testCases),
-    versions: (template.versions ?? []).map((version) => ({
-      ...version,
-      variableSchema: cloneVariableSchema(version.variableSchema),
-      variants: cloneTemplateVariants(version.variants),
-      slots: cloneTemplateSlots(version.slots),
-      localBlocks: cloneLocalBlocks(version.localBlocks),
-      supportedLanguages: cloneLanguages(version.supportedLanguages),
-      defaultLanguage: version.defaultLanguage ?? template.defaultLanguage ?? "en",
-      evaluationBody: version.evaluationBody ?? template.evaluationBody ?? "",
-      evaluationDimensions: cloneEvaluationDimensionDefinitions(
-        version.evaluationDimensions
-      ),
-      testCases: cloneTestCases(version.testCases)
-    }))
+    versions: (template.versions ?? []).map((version) => {
+      const versionSections = ensureDialogueSections(version.dialogueSections, version.body);
+      return {
+        ...version,
+        body: compileDialoguePromptSections(versionSections) || version.body,
+        dialogueSections: versionSections,
+        variableSchema: cloneVariableSchema(version.variableSchema),
+        variants: cloneTemplateVariants(version.variants),
+        slots: cloneTemplateSlots(version.slots),
+        localBlocks: cloneLocalBlocks(version.localBlocks),
+        supportedLanguages: cloneLanguages(version.supportedLanguages),
+        defaultLanguage: version.defaultLanguage ?? template.defaultLanguage ?? "en",
+        evaluationBody: version.evaluationBody ?? template.evaluationBody ?? "",
+        evaluationDimensions: cloneEvaluationDimensionDefinitions(
+          version.evaluationDimensions
+        ),
+        testCases: cloneTestCases(version.testCases)
+      };
+    })
   };
 }
 
@@ -346,7 +369,8 @@ const StudioContext = createContext<StudioContextValue | null>(null);
 function cloneTemplateVersion(template: PromptTemplate): PromptTemplateVersion {
   return {
     version: template.version,
-    body: template.body,
+    body: compileDialoguePromptSections(template.dialogueSections) || template.body,
+    dialogueSections: cloneDialoguePromptSections(template.dialogueSections),
     status: template.status,
     templateMode: template.templateMode,
     variableSchema: cloneVariableSchema(template.variableSchema),
@@ -658,6 +682,7 @@ export function StudioProvider({ children }: PropsWithChildren) {
             return {
               ...template,
               body: snapshot.body,
+              dialogueSections: cloneDialoguePromptSections(snapshot.dialogueSections),
               status: snapshot.status,
               templateMode: snapshot.templateMode,
               variableSchema: cloneVariableSchema(snapshot.variableSchema),
@@ -899,6 +924,22 @@ export function createEditableTemplate(template: PromptTemplate): PromptTemplate
 
 export function createEmptyTemplate(): PromptTemplate {
   const now = new Date().toISOString();
+  const dialogueSections = {
+    ...createDefaultDialogueSections(),
+    roleObjective: "Guide the user through the scenario goal with concise realtime responses.",
+    personas: "Use the following persona cards as the behavioral anchor for the conversation.\n\n{{personas}}",
+    language:
+      "Reply only in the configured scenario language. If the user switches languages, stay in the configured language unless policy says otherwise.",
+    unclearAudio:
+      "If audio is unclear or incomplete, ask the user to repeat in one short sentence. Do not guess the missing words.",
+    conversationFlow:
+      "Open clearly, ask one question at a time, and move the conversation toward the scenario goal.",
+    responseStyle:
+      "Keep responses short, spoken, and natural. Prefer one idea at a time and avoid long monologues.",
+    tools: "",
+    safetyEscalation:
+      "Refuse unsafe requests briefly and redirect to the next safe action or clarification."
+  };
   return {
     id: "template-draft",
     name: "Untitled Template",
@@ -906,14 +947,8 @@ export function createEmptyTemplate(): PromptTemplate {
     description: "New prompt template",
     status: "draft",
     templateMode: "visual",
-    body: [
-      "Describe the scenario goal here.",
-      "",
-      "Scenario personas:",
-      "{{personas}}",
-      "",
-      "{{slot:instruction}}"
-    ].join("\n"),
+    body: compileDialoguePromptSections(dialogueSections),
+    dialogueSections,
     variableSchema: [
       {
         key: "primary_goal",

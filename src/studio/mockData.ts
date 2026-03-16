@@ -1,4 +1,45 @@
-import type { PromptTemplate, Scenario, Snippet, StudioState } from "./types";
+import type {
+  DialoguePromptSections,
+  PromptTemplate,
+  Scenario,
+  Snippet,
+  StudioState
+} from "./types";
+
+function createDialogueSections(
+  sections: Partial<DialoguePromptSections>
+): DialoguePromptSections {
+  return {
+    roleObjective: "",
+    personas: "{{personas}}",
+    language: "",
+    unclearAudio: "",
+    conversationFlow: "",
+    responseStyle: "",
+    tools: "",
+    safetyEscalation: "",
+    ...sections
+  };
+}
+
+function compileDialogueSections(sections: DialoguePromptSections) {
+  return [
+    ["Role & Objective", sections.roleObjective],
+    ["Personas", sections.personas],
+    ["Language", sections.language],
+    ["Unclear Audio", sections.unclearAudio],
+    ["Conversation Flow", sections.conversationFlow],
+    ["Response Style", sections.responseStyle],
+    ["Tools", sections.tools],
+    ["Safety & Escalation", sections.safetyEscalation]
+  ]
+    .map(([title, content]) => {
+      const trimmed = content.trim();
+      return trimmed ? `## ${title}\n${trimmed}` : "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 const snippets: Snippet[] = [
   {
@@ -190,6 +231,81 @@ const snippets: Snippet[] = [
   }
 ];
 
+const liveHostDialogueSections = createDialogueSections({
+  roleObjective:
+    [
+      "Moderate the conversation for {{role_name}} and keep the interaction coherent, safe, and on task.",
+      "",
+      "{{slot:role}}"
+    ].join("\n"),
+  personas:
+    "Use these persona cards as the behavioral anchor for the live exchange.\n\n{{personas}}",
+  language:
+    "Respond only in the configured scenario language. Keep wording natural and spoken, not essay-like.",
+  unclearAudio:
+    "If audio is unclear, ask the user to repeat in one short sentence. Do not assume missing words.",
+  conversationFlow:
+    [
+      "Open clearly, ask one question at a time, and use moderation_style to decide how firm or playful to be.",
+      "",
+      "{{slot:instruction}}"
+    ].join("\n"),
+  responseStyle:
+    [
+      "Keep responses under 120 words, spoken, concise, and easy to follow in real time.",
+      "",
+      "{{slot:tone}}",
+      "",
+      "{{slot:format}}"
+    ].join("\n"),
+  tools: "",
+  safetyEscalation: [
+    "If the user requests disallowed content, refuse briefly and redirect to a safe next step.",
+    "",
+    "{{slot:safety}}"
+  ].join("\n")
+});
+
+const liveHostV1DialogueSections = createDialogueSections({
+  roleObjective: ["Moderate the conversation for {{role_name}}.", "", "{{slot:role}}"].join("\n"),
+  personas: "{{personas}}",
+  language: "Respond only in the configured scenario language.",
+  unclearAudio: "If audio is unclear, ask for repetition before continuing.",
+  conversationFlow: "{{slot:instruction}}",
+  responseStyle: "Keep responses concise and easy to follow in real time.",
+  tools: "",
+  safetyEscalation: "{{slot:safety}}"
+});
+
+const characterBriefDialogueSections = createDialogueSections({
+  roleObjective:
+    [
+      "Create a short operating brief for {{character_name}} that is useful in live role play.",
+      "",
+      "{{slot:role}}"
+    ].join("\n"),
+  personas:
+    "Use these persona cards as the character anchor while building the brief.\n\n{{personas}}",
+  language:
+    "Respond only in the configured scenario language and keep the brief readable out loud.",
+  unclearAudio:
+    "If the user's audio is incomplete or unclear, ask for repetition before finalizing the brief.",
+  conversationFlow:
+    [
+      "Confirm the character goal, gather only missing essentials, then deliver the brief at the requested depth.",
+      "",
+      "{{slot:instruction}}"
+    ].join("\n"),
+  responseStyle:
+    "Use compact spoken phrasing and avoid unnecessary repetition or exposition.",
+  tools: "",
+  safetyEscalation: [
+    "Decline unsafe role-play requests and offer a safer framing when needed.",
+    "",
+    "{{slot:safety}}"
+  ].join("\n")
+});
+
 const templates: PromptTemplate[] = [
   {
     id: "template-live-host",
@@ -198,22 +314,8 @@ const templates: PromptTemplate[] = [
     description: "Defines the moderation prompt structure and allowed snippet slots.",
     status: "ready",
     templateMode: "visual",
-    body: [
-      "Context for role: {{role_name}}",
-      "Moderation style: {{moderation_style}}",
-      "",
-      "{{personas}}",
-      "",
-      "{{slot:role}}",
-      "",
-      "{{slot:tone}}",
-      "",
-      "{{slot:instruction}}",
-      "",
-      "{{slot:safety}}",
-      "",
-      "{{slot:format}}"
-    ].join("\n"),
+    body: compileDialogueSections(liveHostDialogueSections),
+    dialogueSections: liveHostDialogueSections,
     variableSchema: [
       {
         key: "role_name",
@@ -440,7 +542,8 @@ const templates: PromptTemplate[] = [
     versions: [
       {
         version: 1,
-        body: ["{{slot:role}}", "", "{{slot:instruction}}", "", "{{slot:safety}}"].join("\n"),
+        body: compileDialogueSections(liveHostV1DialogueSections),
+        dialogueSections: liveHostV1DialogueSections,
         status: "draft",
         templateMode: "structured",
         variableSchema: [
@@ -505,22 +608,8 @@ const templates: PromptTemplate[] = [
       },
       {
         version: 2,
-        body: [
-          "Context for role: {{role_name}}",
-          "Moderation style: {{moderation_style}}",
-          "",
-          "{{personas}}",
-          "",
-          "{{slot:role}}",
-          "",
-          "{{slot:tone}}",
-          "",
-          "{{slot:instruction}}",
-          "",
-          "{{slot:safety}}",
-          "",
-          "{{slot:format}}"
-        ].join("\n"),
+        body: compileDialogueSections(liveHostDialogueSections),
+        dialogueSections: liveHostDialogueSections,
         status: "ready",
         templateMode: "visual",
         variableSchema: [
@@ -755,18 +844,8 @@ const templates: PromptTemplate[] = [
     description: "Builds short operational character briefs from reusable blocks.",
     status: "draft",
     templateMode: "structured",
-    body: [
-      "Character under review: {{character_name}}",
-      "Brief depth: {{brief_depth}}",
-      "",
-      "{{personas}}",
-      "",
-      "{{slot:role}}",
-      "",
-      "{{slot:instruction}}",
-      "",
-      "{{slot:safety}}"
-    ].join("\n"),
+    body: compileDialogueSections(characterBriefDialogueSections),
+    dialogueSections: characterBriefDialogueSections,
     variableSchema: [
       {
         key: "character_name",
@@ -924,18 +1003,8 @@ const templates: PromptTemplate[] = [
     versions: [
       {
         version: 1,
-        body: [
-          "Character under review: {{character_name}}",
-          "Brief depth: {{brief_depth}}",
-          "",
-          "{{personas}}",
-          "",
-          "{{slot:role}}",
-          "",
-          "{{slot:instruction}}",
-          "",
-          "{{slot:safety}}"
-        ].join("\n"),
+        body: compileDialogueSections(characterBriefDialogueSections),
+        dialogueSections: characterBriefDialogueSections,
         status: "draft",
         templateMode: "structured",
         variableSchema: [

@@ -131,7 +131,10 @@ describe("scenario rendering", () => {
     const result = validateTemplateStructure(
       {
         ...template,
-        body: `${template.body}\n\nUse fallback for {{role_name_error}}`
+        dialogueSections: {
+          ...template.dialogueSections,
+          responseStyle: `${template.dialogueSections.responseStyle}\n\nUse fallback for {{role_name_error}}`
+        }
       },
       snippets
     );
@@ -147,7 +150,10 @@ describe("scenario rendering", () => {
     const result = validateTemplateStructure(
       {
         ...template,
-        body: "Context only",
+        dialogueSections: {
+          ...template.dialogueSections,
+          personas: "Context only"
+        },
         evaluationBody: "",
         supportedLanguages: [],
         defaultLanguage: "en"
@@ -157,7 +163,9 @@ describe("scenario rendering", () => {
 
     expect(result.errors).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('Dialogue prompt must include the "{{personas}}" placeholder.'),
+        expect.stringContaining(
+          'Dialogue section "Personas" must include the "{{personas}}" placeholder.'
+        ),
         expect.stringContaining("Evaluation prompt structure is required."),
         expect.stringContaining("At least one supported language is required.")
       ])

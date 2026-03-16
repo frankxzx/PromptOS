@@ -84,6 +84,17 @@ export interface LocalBlock {
   conditionRule?: ConditionRule;
 }
 
+export interface DialoguePromptSections {
+  roleObjective: string;
+  personas: string;
+  language: string;
+  unclearAudio: string;
+  conversationFlow: string;
+  responseStyle: string;
+  tools: string;
+  safetyEscalation: string;
+}
+
 export interface EvaluationDimensionDefinition {
   id: string;
   key: string;
@@ -116,6 +127,7 @@ export interface TemplateTestCase {
 export interface PromptTemplateVersion {
   version: number;
   body: string;
+  dialogueSections: DialoguePromptSections;
   status: EntityStatus;
   templateMode: TemplateMode;
   variableSchema: VariableSchemaItem[];
@@ -140,6 +152,7 @@ export interface PromptTemplate {
   status: EntityStatus;
   templateMode: TemplateMode;
   body: string;
+  dialogueSections: DialoguePromptSections;
   variableSchema: VariableSchemaItem[];
   variants: TemplateVariantDefinition[];
   slots: TemplateSlotDefinition[];
