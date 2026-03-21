@@ -207,33 +207,37 @@ export function SnippetLibraryPage() {
         </label>
       </section>
 
-      <section className="snippet-grid" aria-label="Snippet library results">
+      <section className="library-list" aria-label="Snippet library results">
         {filteredSnippets.length === 0 ? (
-          <article className="snippet-card">
+          <article className="panel">
             <h3>No snippets found</h3>
-            <p className="card-copy">Adjust the filters or create a new snippet.</p>
+            <p className="muted-copy">Adjust the filters or create a new snippet.</p>
           </article>
         ) : (
           filteredSnippets.map((snippet) => (
-            <article key={snippet.id} className="snippet-card">
-              <div className="snippet-card-top">
-                <span className="snippet-type">{snippet.type}</span>
-                <span className={`status-pill ${snippet.status}`}>{snippet.status}</span>
+            <article key={snippet.id} className="library-row">
+              <div className="library-row-main">
+                <div className="snippet-card-top">
+                  <span className="snippet-type">{snippet.type}</span>
+                  <span className={`status-pill ${snippet.status}`}>{snippet.status}</span>
+                </div>
+                <h3 className="library-row-title">{snippet.name}</h3>
+                <p className="table-subcopy">{snippet.description}</p>
               </div>
-              <h3>{snippet.name}</h3>
-              <p className="card-copy">{snippet.description}</p>
-              <dl className="stats-grid">
-                <div>
+
+              <dl className="library-row-stats" aria-label={`${snippet.name} metadata`}>
+                <div className="library-stat">
                   <dt>Current</dt>
                   <dd>v{snippet.currentVersion}</dd>
                 </div>
-                <div>
+                <div className="library-stat">
                   <dt>Usage</dt>
                   <dd>{snippetUsageCountById.get(snippet.id) ?? 0} bindings</dd>
                 </div>
               </dl>
+
               <Link to={`/snippets/${snippet.id}`} className="secondary-link">
-                View detail
+                Open snippet
               </Link>
             </article>
           ))
