@@ -9,15 +9,12 @@ import {
 } from "../../studio/render";
 import { syncScenarioToTemplateVersion } from "../../studio/operations";
 import type { LanguageCode, PromptTemplate, Scenario } from "../../studio/types";
+import { PageState } from "../components/PageState";
+import { PersonaBindingsEditor } from "../components/PersonaBindingsEditor";
+import { SchemaFieldInput } from "../components/SchemaFieldInput";
+import { LANGUAGE_LABELS } from "../constants";
 
 type ToastState = { tone: "success" | "error"; message: string } | null;
-
-const LANGUAGE_LABELS: Record<LanguageCode, string> = {
-  en: "English",
-  zh: "Chinese",
-  es: "Spanish",
-  ja: "Japanese"
-};
 
 export function ScenarioEditorPage() {
   const { scenarioId } = useParams();
@@ -67,31 +64,45 @@ export function ScenarioEditorPage() {
 
   if (!sourceScenario || !draft || !template || !resolvedTemplate || !preview || !evaluationPreview) {
     return (
-      <section className="page-shell">
-        <p>Scenario not found.</p>
-      </section>
+      <PageState
+        title="Scenario not found"
+        description="The requested scenario may have been deleted or is no longer available."
+        action={{ label: "Back to scenarios", to: "/scenarios" }}
+      />
     );
   }
 
   const activeScenario = draft;
   const persistedScenario = sourceScenario;
   const activeTemplate: PromptTemplate = template;
-  const inputSchema = getTemplateInputSchema(resolvedTemplate);
-  const snippetVariants = resolvedTemplate.variants.filter((variant) => variant.type === "snippet");
-  const fieldVariantsByKey = new Map(
-    resolvedTemplate.variants.map((variant) => [variant.key, variant])
+  const inputSchema = useMemo(() => getTemplateInputSchema(resolvedTemplate), [resolvedTemplate]);
+  const snippetVariants = useMemo(
+    () => resolvedTemplate.variants.filter((variant) => variant.type === "snippet"),
+    [resolvedTemplate]
   );
-  const selectedPersonaCards = activeScenario.personaBindings.map((binding, index) => {
-    const snippet = snippets.find((item) => item.id === binding.snippetId);
-    const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
-    return {
-      id: binding.id,
-      label: `Persona ${index + 1}`,
-      snippetName: snippet?.name ?? "Missing persona",
-      pinnedVersion: binding.pinnedVersion,
-      content: version?.content ?? "Persona content unavailable."
-    };
-  });
+  const fieldVariantsByKey = useMemo(
+    () => new Map(resolvedTemplate.variants.map((variant) => [variant.key, variant])),
+    [resolvedTemplate]
+  );
+  const selectedPersonaCards = useMemo(
+    () =>
+      activeScenario.personaBindings.map((binding, index) => {
+        const snippet = snippets.find((item) => item.id === binding.snippetId);
+        const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
+        return {
+          id: binding.id,
+          label: `Persona ${index + 1}`,
+          snippetName: snippet?.name ?? "Missing persona",
+          pinnedVersion: binding.pinnedVersion,
+          content: version?.content ?? "Persona content unavailable."
+        };
+      }),
+    [activeScenario.personaBindings, snippets]
+  );
+  const resolvedPreviewBlocks = useMemo(
+    () => preview.resolvedBlocks.filter((block) => !block.slot.startsWith("persona:")),
+    [preview.resolvedBlocks]
+  );
 
   function updateDraft(nextScenario: Scenario) {
     setDraft(nextScenario);
@@ -316,7 +327,11 @@ export function ScenarioEditorPage() {
         </div>
       </header>
 
-      {toast ? <div className={`banner ${toast.tone}`}>{toast.message}</div> : null}
+      {toast ? (
+        <div className={`banner ${toast.tone}`} role="status" aria-live="polite">
+          {toast.message}
+        </div>
+      ) : null}
 
       <div className="editor-shell">
         <aside className="editor-column side">
@@ -404,172 +419,37 @@ export function ScenarioEditorPage() {
                   {item.label}
                   {item.required ? " *" : ""}
                 </span>
-                {item.type === "boolean" ? (
-                  <select
-                    value={String(activeScenario.variableValues[item.key] ?? false)}
-                    onChange={(event) =>
-                      updateDraft({
-                        ...activeScenario,
-                        variableValues: {
-                          ...activeScenario.variableValues,
-                          [item.key]: event.target.value === "true"
-                        }
-                      })
-                    }
-                    className={preview.missingVariables.includes(item.key) ? "field-error" : ""}
-                  >
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                  </select>
-                ) : fieldVariantsByKey.get(item.key)?.type === "creatable_select" ? (
-                  <>
-                    <input
-                      list={`variant-${item.key}-options`}
-                      value={String(activeScenario.variableValues[item.key] ?? item.defaultValue ?? "")}
-                      onChange={(event) =>
-                        updateDraft({
-                          ...activeScenario,
-                          variableValues: {
-                            ...activeScenario.variableValues,
-                            [item.key]: event.target.value
-                          }
-                        })
+                <SchemaFieldInput
+                  id={`scenario-field-${item.key}`}
+                  item={item}
+                  value={activeScenario.variableValues[item.key]}
+                  missing={preview.missingVariables.includes(item.key)}
+                  variantType={fieldVariantsByKey.get(item.key)?.type}
+                  onChange={(value) =>
+                    updateDraft({
+                      ...activeScenario,
+                      variableValues: {
+                        ...activeScenario.variableValues,
+                        [item.key]: value
                       }
-                      className={preview.missingVariables.includes(item.key) ? "field-error" : ""}
-                    />
-                    <datalist id={`variant-${item.key}-options`}>
-                      {item.options?.map((option) => (
-                        <option key={option} value={option} />
-                      ))}
-                    </datalist>
-                  </>
-                ) : item.type === "select" ? (
-                  <select
-                    value={String(activeScenario.variableValues[item.key] ?? item.defaultValue ?? "")}
-                    onChange={(event) =>
-                      updateDraft({
-                        ...activeScenario,
-                        variableValues: {
-                          ...activeScenario.variableValues,
-                          [item.key]: event.target.value
-                        }
-                      })
-                    }
-                    className={preview.missingVariables.includes(item.key) ? "field-error" : ""}
-                  >
-                    {item.options?.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    value={String(activeScenario.variableValues[item.key] ?? "")}
-                    onChange={(event) =>
-                      updateDraft({
-                        ...activeScenario,
-                        variableValues: {
-                          ...activeScenario.variableValues,
-                          [item.key]: event.target.value
-                        }
-                      })
-                    }
-                    className={preview.missingVariables.includes(item.key) ? "field-error" : ""}
-                  />
-                )}
+                    })
+                  }
+                />
               </label>
             ))}
           </section>
 
           <section className="panel">
-            <div className="panel-header-row">
-              <div>
-                <h3>Persona cards</h3>
-                <p className="muted-copy">
-                  Persona snippets shape the dialogue voice, background, and behavior.
-                </p>
-              </div>
-              <button type="button" className="secondary-button" onClick={addPersona}>
-                Add persona
-              </button>
-            </div>
-            {activeScenario.personaBindings.length === 0 ? (
-              <p className="muted-copy">
-                No persona cards selected. Add one if this scenario uses{" "}
-                <code>{"{{personas}}"}</code>.
-              </p>
-            ) : (
-              <div className="stack-list">
-                {activeScenario.personaBindings.map((binding, index) => {
-                  const personaSnippets = snippets.filter((item) => item.type === "persona");
-                  const selectedSnippet = personaSnippets.find(
-                    (snippet) => snippet.id === binding.snippetId
-                  );
-
-                  return (
-                    <article key={binding.id} className="nested-card">
-                      <div className="panel-header-row">
-                        <strong>Persona {index + 1}</strong>
-                        <div className="inline-actions">
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={() => movePersona(index, -1)}
-                          >
-                            Up
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={() => movePersona(index, 1)}
-                          >
-                            Down
-                          </button>
-                        </div>
-                      </div>
-                      <label className="field">
-                        <span className="field-label">Persona snippet</span>
-                        <select
-                          value={binding.snippetId ?? ""}
-                          onChange={(event) => updatePersona(index, event.target.value)}
-                        >
-                          <option value="">Select persona</option>
-                          {personaSnippets.map((snippet) => (
-                            <option key={snippet.id} value={snippet.id}>
-                              {snippet.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span className="field-label">Pinned version</span>
-                        <select
-                          value={binding.pinnedVersion ?? selectedSnippet?.currentVersion ?? ""}
-                          onChange={(event) =>
-                            updatePersonaVersion(index, Number(event.target.value))
-                          }
-                          disabled={!selectedSnippet}
-                        >
-                          {selectedSnippet?.versions.map((version) => (
-                            <option key={version.version} value={version.version}>
-                              v{version.version}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => updatePersona(index, "")}
-                      >
-                        Remove persona
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
+            <PersonaBindingsEditor
+              bindings={activeScenario.personaBindings}
+              snippets={snippets}
+              emptyMessage="No persona cards selected. Add one if this scenario uses {{personas}}."
+              onAdd={addPersona}
+              onMove={movePersona}
+              onChangeSnippet={updatePersona}
+              onChangeVersion={updatePersonaVersion}
+              onRemove={(index) => updatePersona(index, "")}
+            />
           </section>
 
           {snippetVariants.length > 0 ? (
@@ -827,9 +707,7 @@ export function ScenarioEditorPage() {
               ))}
             </div>
             <div className="preview-block-list">
-              {preview.resolvedBlocks
-                .filter((block) => !block.slot.startsWith("persona:"))
-                .map((block) => (
+              {resolvedPreviewBlocks.map((block) => (
                 <article key={block.id} className="source-block">
                   <div className="panel-header-row">
                     <span className="source-pill">

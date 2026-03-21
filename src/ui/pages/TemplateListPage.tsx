@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
 import { useDeferredValue, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useStudio } from "../../studio/StudioContext";
 
 export function TemplateListPage() {
@@ -73,7 +73,10 @@ export function TemplateListPage() {
         </label>
         <label className="field">
           <span className="field-label">Status</span>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+          >
             <option value="all">All</option>
             <option value="draft">Draft</option>
             <option value="ready">Ready</option>
@@ -81,7 +84,10 @@ export function TemplateListPage() {
         </label>
         <label className="field">
           <span className="field-label">Mode</span>
-          <select value={modeFilter} onChange={(event) => setModeFilter(event.target.value as typeof modeFilter)}>
+          <select
+            value={modeFilter}
+            onChange={(event) => setModeFilter(event.target.value as typeof modeFilter)}
+          >
             <option value="all">All</option>
             <option value="visual">Visual</option>
             <option value="structured">Structured</option>
@@ -91,37 +97,47 @@ export function TemplateListPage() {
       </section>
 
       <div className="table-card">
-        <table className="studio-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Domain</th>
-              <th>Status</th>
-              <th>Mode</th>
-              <th>Slots</th>
-              <th>Version</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTemplates.map((template) => (
-              <tr key={template.id}>
-                <td>
-                  <Link to={`/templates/${template.id}`} className="table-link">
-                    {template.name}
-                  </Link>
-                  <p className="table-subcopy">{template.description}</p>
-                </td>
-                <td>{template.businessDomain}</td>
-                <td>
-                  <span className={`status-pill ${template.status}`}>{template.status}</span>
-                </td>
-                <td>{template.templateMode}</td>
-                <td>{template.slots.length}</td>
-                <td>v{template.version}</td>
+        <div className="table-scroll">
+          <table className="studio-table" aria-label="Prompt templates">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Domain</th>
+                <th>Status</th>
+                <th>Mode</th>
+                <th>Slots</th>
+                <th>Version</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredTemplates.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="table-empty">
+                    No templates match the current filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredTemplates.map((template) => (
+                  <tr key={template.id}>
+                    <td>
+                      <Link to={`/templates/${template.id}`} className="table-link">
+                        {template.name}
+                      </Link>
+                      <p className="table-subcopy">{template.description}</p>
+                    </td>
+                    <td>{template.businessDomain}</td>
+                    <td>
+                      <span className={`status-pill ${template.status}`}>{template.status}</span>
+                    </td>
+                    <td>{template.templateMode}</td>
+                    <td>{template.slots.length}</td>
+                    <td>v{template.version}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

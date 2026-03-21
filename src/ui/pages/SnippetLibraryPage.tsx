@@ -1,10 +1,14 @@
-import { Link, useNavigate } from "react-router-dom";
 import { useDeferredValue, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useStudio } from "../../studio/StudioContext";
 import type { SnippetStatus, SnippetType } from "../../studio/types";
+import {
+  SNIPPET_STATUS_OPTIONS,
+  SNIPPET_TYPE_OPTIONS
+} from "../constants";
 
 export function SnippetLibraryPage() {
-  const { currentRole, snippets, getScenarioUsageForSnippet, createSnippet } = useStudio();
+  const { currentRole, scenarios, snippets, createSnippet } = useStudio();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<SnippetType | "all">("all");
@@ -16,6 +20,25 @@ export function SnippetLibraryPage() {
   const [createContent, setCreateContent] = useState("");
   const [createMessage, setCreateMessage] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
+
+  const snippetUsageCountById = useMemo(() => {
+    const usage = new Map<string, number>();
+
+    scenarios.forEach((scenario) => {
+      [
+        ...scenario.personaBindings,
+        ...scenario.snippetBindings,
+        ...scenario.variantSnippetBindings
+      ].forEach((binding) => {
+        if (!binding.snippetId) {
+          return;
+        }
+        usage.set(binding.snippetId, (usage.get(binding.snippetId) ?? 0) + 1);
+      });
+    });
+
+    return usage;
+  }, [scenarios]);
 
   const filteredSnippets = useMemo(
     () =>
@@ -51,6 +74,8 @@ export function SnippetLibraryPage() {
               setShowCreate((value) => !value);
               setCreateMessage(null);
             }}
+            aria-expanded={showCreate}
+            aria-controls="snippet-create-panel"
           >
             {showCreate ? "Hide create form" : "Add snippet"}
           </button>
@@ -58,7 +83,7 @@ export function SnippetLibraryPage() {
       </header>
 
       {showCreate ? (
-        <section className="panel primary-panel">
+        <section className="panel primary-panel" id="snippet-create-panel">
           <div className="panel-header-row">
             <div>
               <p className="eyebrow">Snippet creation</p>
@@ -67,7 +92,11 @@ export function SnippetLibraryPage() {
             </div>
             <span className="pill subtle">Primary</span>
           </div>
-          {createMessage ? <div className="banner success">{createMessage}</div> : null}
+          {createMessage ? (
+            <div className="banner success" role="status" aria-live="polite">
+              {createMessage}
+            </div>
+          ) : null}
           <div className="form-section">
             <p className="section-label">Snippet metadata</p>
             <div className="field-row">
@@ -81,12 +110,11 @@ export function SnippetLibraryPage() {
                   value={createType}
                   onChange={(event) => setCreateType(event.target.value as SnippetType)}
                 >
-                  <option value="role">Role</option>
-                  <option value="persona">Persona</option>
-                  <option value="instruction">Instruction</option>
-                  <option value="format">Format</option>
-                  <option value="safety">Safety</option>
-                  <option value="tone">Tone</option>
+                  {SNIPPET_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="field">
@@ -95,8 +123,11 @@ export function SnippetLibraryPage() {
                   value={createStatus}
                   onChange={(event) => setCreateStatus(event.target.value as SnippetStatus)}
                 >
-                  <option value="active">Active</option>
-                  <option value="deprecated">Deprecated</option>
+                  {SNIPPET_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -167,40 +198,50 @@ export function SnippetLibraryPage() {
             onChange={(event) => setTypeFilter(event.target.value as SnippetType | "all")}
           >
             <option value="all">All</option>
-            <option value="role">Role</option>
-            <option value="persona">Persona</option>
-            <option value="instruction">Instruction</option>
-            <option value="format">Format</option>
-            <option value="safety">Safety</option>
-            <option value="tone">Tone</option>
+            {SNIPPET_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
       </section>
 
-      <section className="snippet-grid">
-        {filteredSnippets.map((snippet) => (
-          <article key={snippet.id} className="snippet-card">
-            <div className="snippet-card-top">
-              <span className="snippet-type">{snippet.type}</span>
-              <span className={`status-pill ${snippet.status}`}>{snippet.status}</span>
-            </div>
-            <h3>{snippet.name}</h3>
-            <p className="card-copy">{snippet.description}</p>
-            <dl className="stats-grid">
-              <div>
-                <dt>Current</dt>
-                <dd>v{snippet.currentVersion}</dd>
-              </div>
-              <div>
-                <dt>Usage</dt>
-                <dd>{getScenarioUsageForSnippet(snippet.id).length} scenarios</dd>
-              </div>
-            </dl>
-            <Link to={`/snippets/${snippet.id}`} className="secondary-link">
-              View detail
-            </Link>
+      <section className="library-list" aria-label="Snippet library results">
+        {filteredSnippets.length === 0 ? (
+          <article className="panel">
+            <h3>No snippets found</h3>
+            <p className="muted-copy">Adjust the filters or create a new snippet.</p>
           </article>
-        ))}
+        ) : (
+          filteredSnippets.map((snippet) => (
+            <article key={snippet.id} className="library-row">
+              <div className="library-row-main">
+                <div className="snippet-card-top">
+                  <span className="snippet-type">{snippet.type}</span>
+                  <span className={`status-pill ${snippet.status}`}>{snippet.status}</span>
+                </div>
+                <h3 className="library-row-title">{snippet.name}</h3>
+                <p className="table-subcopy">{snippet.description}</p>
+              </div>
+
+              <dl className="library-row-stats" aria-label={`${snippet.name} metadata`}>
+                <div className="library-stat">
+                  <dt>Current</dt>
+                  <dd>v{snippet.currentVersion}</dd>
+                </div>
+                <div className="library-stat">
+                  <dt>Usage</dt>
+                  <dd>{snippetUsageCountById.get(snippet.id) ?? 0} bindings</dd>
+                </div>
+              </dl>
+
+              <Link to={`/snippets/${snippet.id}`} className="secondary-link">
+                Open snippet
+              </Link>
+            </article>
+          ))
+        )}
       </section>
     </section>
   );
