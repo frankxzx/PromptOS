@@ -31,6 +31,10 @@ import type {
   VariableSchemaItem,
   VariantFieldType
 } from "../../studio/types";
+import { PageState } from "../components/PageState";
+import { PersonaBindingsEditor } from "../components/PersonaBindingsEditor";
+import { SchemaFieldInput } from "../components/SchemaFieldInput";
+import { LANGUAGE_OPTIONS, SNIPPET_TYPE_OPTIONS } from "../constants";
 
 type ToastState = { tone: "success" | "error"; message: string } | null;
 
@@ -70,13 +74,6 @@ function getSnippetChoices(snippets: Snippet[], allowedTypes: Snippet["type"][] 
   }
   return snippets.filter((snippet) => allowedTypes.includes(snippet.type));
 }
-
-const LANGUAGE_OPTIONS: Array<{ value: LanguageCode; label: string }> = [
-  { value: "en", label: "English" },
-  { value: "zh", label: "Chinese" },
-  { value: "es", label: "Spanish" },
-  { value: "ja", label: "Japanese" }
-];
 
 const DIALOGUE_SECTION_FIELDS: Array<{
   key: keyof DialoguePromptSections;
@@ -195,38 +192,65 @@ export function TemplateBuilderPage() {
 
   if ((!isNewTemplate && !sourceTemplate) || !draft || !testScenario || !resolvedTestTemplate) {
     return (
-      <section className="page-shell">
-        <p>Template not found.</p>
-      </section>
+      <PageState
+        title="Template not found"
+        description="The requested template may have been deleted or the URL is no longer valid."
+        action={{ label: "Back to templates", to: "/templates" }}
+      />
     );
   }
 
   const activeTemplate = draft;
   const persistedTemplate = sourceTemplate ?? activeTemplate;
   const activeTestScenario = testScenario;
-  const staticValidation = validateTemplateStructure(activeTemplate, snippets);
-  const testPreview = renderScenarioPreview(activeTemplate, activeTestScenario, snippets);
-  const evaluationPreview = renderEvaluationPreview(activeTemplate, activeTestScenario);
-  const testValidation = validateScenario(activeTemplate, activeTestScenario, snippets);
-  const testInputSchema = getTemplateInputSchema(resolvedTestTemplate);
-  const fieldVariantsByKey = new Map(
-    resolvedTestTemplate.variants.map((variant) => [variant.key, variant])
+  const staticValidation = useMemo(
+    () => validateTemplateStructure(activeTemplate, snippets),
+    [activeTemplate, snippets]
   );
-  const snippetVariants = resolvedTestTemplate.variants.filter(
-    (variant) => variant.type === "snippet"
+  const testPreview = useMemo(
+    () => renderScenarioPreview(activeTemplate, activeTestScenario, snippets),
+    [activeTemplate, activeTestScenario, snippets]
   );
-  const versionOptions = getVersionOptions(activeTemplate);
-  const selectedTestPersonaCards = activeTestScenario.personaBindings.map((binding, index) => {
-    const snippet = snippets.find((item) => item.id === binding.snippetId);
-    const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
-    return {
-      id: binding.id,
-      label: `Persona ${index + 1}`,
-      snippetName: snippet?.name ?? "Missing persona",
-      pinnedVersion: binding.pinnedVersion,
-      content: version?.content ?? "Persona content unavailable."
-    };
-  });
+  const evaluationPreview = useMemo(
+    () => renderEvaluationPreview(activeTemplate, activeTestScenario),
+    [activeTemplate, activeTestScenario]
+  );
+  const testValidation = useMemo(
+    () => validateScenario(activeTemplate, activeTestScenario, snippets),
+    [activeTemplate, activeTestScenario, snippets]
+  );
+  const testInputSchema = useMemo(
+    () => getTemplateInputSchema(resolvedTestTemplate),
+    [resolvedTestTemplate]
+  );
+  const fieldVariantsByKey = useMemo(
+    () => new Map(resolvedTestTemplate.variants.map((variant) => [variant.key, variant])),
+    [resolvedTestTemplate]
+  );
+  const snippetVariants = useMemo(
+    () => resolvedTestTemplate.variants.filter((variant) => variant.type === "snippet"),
+    [resolvedTestTemplate]
+  );
+  const versionOptions = useMemo(() => getVersionOptions(activeTemplate), [activeTemplate]);
+  const selectedTestPersonaCards = useMemo(
+    () =>
+      activeTestScenario.personaBindings.map((binding, index) => {
+        const snippet = snippets.find((item) => item.id === binding.snippetId);
+        const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
+        return {
+          id: binding.id,
+          label: `Persona ${index + 1}`,
+          snippetName: snippet?.name ?? "Missing persona",
+          pinnedVersion: binding.pinnedVersion,
+          content: version?.content ?? "Persona content unavailable."
+        };
+      }),
+    [activeTestScenario.personaBindings, snippets]
+  );
+  const resolvedTestBlocks = useMemo(
+    () => testPreview.resolvedBlocks.filter((block) => !block.slot.startsWith("persona:")),
+    [testPreview.resolvedBlocks]
+  );
 
   function updateDraft(nextTemplate: PromptTemplate) {
     setDraft(nextTemplate);
@@ -716,7 +740,11 @@ export function TemplateBuilderPage() {
         </div>
       </header>
 
-      {toast ? <div className={`banner ${toast.tone}`}>{toast.message}</div> : null}
+      {toast ? (
+        <div className={`banner ${toast.tone}`} role="status" aria-live="polite">
+          {toast.message}
+        </div>
+      ) : null}
 
       <div className="editor-shell">
         <aside className="editor-column side">
@@ -936,12 +964,11 @@ export function TemplateBuilderPage() {
                             })
                           }
                         >
-                          <option value="role">role</option>
-                          <option value="persona">persona</option>
-                          <option value="instruction">instruction</option>
-                          <option value="format">format</option>
-                          <option value="safety">safety</option>
-                          <option value="tone">tone</option>
+                          {SNIPPET_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.value}
+                            </option>
+                          ))}
                         </select>
                       </label>
                       <label className="field">
@@ -1020,12 +1047,11 @@ export function TemplateBuilderPage() {
                         })
                       }
                     >
-                      <option value="role">role</option>
-                      <option value="persona">persona</option>
-                      <option value="instruction">instruction</option>
-                      <option value="format">format</option>
-                      <option value="safety">safety</option>
-                      <option value="tone">tone</option>
+                      {SNIPPET_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.value}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="field">
@@ -1367,82 +1393,17 @@ export function TemplateBuilderPage() {
                   Add persona
                 </button>
               </div>
-              {activeTestScenario.personaBindings.length === 0 ? (
-                <p className="muted-copy">
-                  No persona cards selected. Add one if this template uses{" "}
-                  <code>{"{{personas}}"}</code>.
-                </p>
-              ) : (
-                <div className="stack-list">
-                  {activeTestScenario.personaBindings.map((binding, index) => {
-                    const personaSnippets = snippets.filter((item) => item.type === "persona");
-                    const selectedSnippet = personaSnippets.find(
-                      (snippet) => snippet.id === binding.snippetId
-                    );
-
-                    return (
-                      <article key={binding.id} className="nested-card">
-                        <div className="panel-header-row">
-                          <strong>Persona {index + 1}</strong>
-                          <div className="inline-actions">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => moveTestPersona(index, -1)}
-                            >
-                              Up
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => moveTestPersona(index, 1)}
-                            >
-                              Down
-                            </button>
-                          </div>
-                        </div>
-                        <label className="field">
-                          <span className="field-label">Persona snippet</span>
-                          <select
-                            value={binding.snippetId ?? ""}
-                            onChange={(event) => updateTestPersona(index, event.target.value)}
-                          >
-                            <option value="">Select persona</option>
-                            {personaSnippets.map((snippet) => (
-                              <option key={snippet.id} value={snippet.id}>
-                                {snippet.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span className="field-label">Pinned version</span>
-                          <select
-                            value={binding.pinnedVersion ?? selectedSnippet?.currentVersion ?? ""}
-                            onChange={(event) =>
-                              updateTestPersonaVersion(index, Number(event.target.value))
-                            }
-                            disabled={!selectedSnippet}
-                          >
-                            {selectedSnippet?.versions.map((version) => (
-                              <option key={version.version} value={version.version}>
-                                v{version.version}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => updateTestPersona(index, "")}
-                        >
-                          Remove persona
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
+              <PersonaBindingsEditor
+                bindings={activeTestScenario.personaBindings}
+                snippets={snippets}
+                emptyMessage="No persona cards selected. Add one if this template uses {{personas}}."
+                onAdd={addTestPersona}
+                onMove={moveTestPersona}
+                onChangeSnippet={updateTestPersona}
+                onChangeVersion={updateTestPersonaVersion}
+                onRemove={(index) => updateTestPersona(index, "")}
+                showHeader={false}
+              />
 
               {testInputSchema.map((item) => {
                 const fieldVariant = fieldVariantsByKey.get(item.key);
@@ -1452,62 +1413,14 @@ export function TemplateBuilderPage() {
                       {item.label}
                       {item.required ? " *" : ""}
                     </span>
-                    {item.type === "boolean" ? (
-                      <select
-                        value={String(activeTestScenario.variableValues[item.key] ?? false)}
-                        onChange={(event) =>
-                          updateTestVariable(item.key, event.target.value === "true")
-                        }
-                        className={
-                          testPreview.missingVariables.includes(item.key) ? "field-error" : ""
-                        }
-                      >
-                        <option value="true">true</option>
-                        <option value="false">false</option>
-                      </select>
-                    ) : fieldVariant?.type === "creatable_select" ? (
-                      <>
-                        <input
-                          list={`template-test-${item.key}`}
-                          value={String(
-                            activeTestScenario.variableValues[item.key] ?? item.defaultValue ?? ""
-                          )}
-                          onChange={(event) => updateTestVariable(item.key, event.target.value)}
-                          className={
-                            testPreview.missingVariables.includes(item.key) ? "field-error" : ""
-                          }
-                        />
-                        <datalist id={`template-test-${item.key}`}>
-                          {item.options?.map((option) => (
-                            <option key={option} value={option} />
-                          ))}
-                        </datalist>
-                      </>
-                    ) : item.type === "select" ? (
-                      <select
-                        value={String(
-                          activeTestScenario.variableValues[item.key] ?? item.defaultValue ?? ""
-                        )}
-                        onChange={(event) => updateTestVariable(item.key, event.target.value)}
-                        className={
-                          testPreview.missingVariables.includes(item.key) ? "field-error" : ""
-                        }
-                      >
-                        {item.options?.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={String(activeTestScenario.variableValues[item.key] ?? "")}
-                        onChange={(event) => updateTestVariable(item.key, event.target.value)}
-                        className={
-                          testPreview.missingVariables.includes(item.key) ? "field-error" : ""
-                        }
-                      />
-                    )}
+                    <SchemaFieldInput
+                      id={`template-test-${item.key}`}
+                      item={item}
+                      value={activeTestScenario.variableValues[item.key]}
+                      missing={testPreview.missingVariables.includes(item.key)}
+                      variantType={fieldVariant?.type}
+                      onChange={(value) => updateTestVariable(item.key, value)}
+                    />
                   </label>
                 );
               })}
@@ -1698,9 +1611,7 @@ export function TemplateBuilderPage() {
               ))}
             </div>
             <div className="preview-block-list">
-              {testPreview.resolvedBlocks
-                .filter((block) => !block.slot.startsWith("persona:"))
-                .map((block) => (
+              {resolvedTestBlocks.map((block) => (
                 <article key={block.id} className="source-block">
                   <div className="panel-header-row">
                     <span className="source-pill">

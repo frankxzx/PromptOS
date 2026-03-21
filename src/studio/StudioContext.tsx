@@ -461,7 +461,11 @@ export function StudioProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<StudioState>(() => loadInitialState());
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Ignore storage failures so the editor remains usable in restricted environments.
+    }
   }, [state]);
 
   const value = useMemo<StudioContextValue>(
@@ -623,6 +627,14 @@ export function StudioProvider({ children }: PropsWithChildren) {
                   updatedAt: scenario.updatedAt
                 })),
               ...scenario.snippetBindings
+                .filter((binding) => binding.snippetId === snippetId)
+                .map((binding) => ({
+                  scenarioId: scenario.id,
+                  scenarioName: scenario.name,
+                  pinnedVersion: binding.pinnedVersion ?? 0,
+                  updatedAt: scenario.updatedAt
+                })),
+              ...scenario.variantSnippetBindings
                 .filter((binding) => binding.snippetId === snippetId)
                 .map((binding) => ({
                   scenarioId: scenario.id,

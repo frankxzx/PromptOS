@@ -12,6 +12,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  accent-color: #ea580c;
 }
 
 * {
@@ -20,6 +21,7 @@
 
 body {
   margin: 0;
+  min-width: 320px;
 }
 
 button,
@@ -27,6 +29,10 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+button {
+  touch-action: manipulation;
 }
 
 a {
@@ -44,6 +50,36 @@ pre {
   min-height: 100vh;
 }
 
+:focus-visible {
+  outline: 3px solid rgba(234, 88, 12, 0.28);
+  outline-offset: 3px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.skip-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 40;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #f8fafc;
+  transform: translateY(-140%);
+  transition: transform 180ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -58,6 +94,7 @@ pre {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
 }
 
 .app-topbar {
@@ -79,6 +116,7 @@ pre {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  gap: 24px;
   padding: 28px 22px;
   background: rgba(15, 23, 42, 0.95);
   color: #f8fafc;
@@ -115,7 +153,7 @@ pre {
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.05);
-  transition: transform 180ms ease, background 180ms ease;
+  transition: transform 180ms ease, background 180ms ease, color 180ms ease;
 }
 
 .nav-link.active,
@@ -230,9 +268,20 @@ pre {
   border-radius: 24px;
 }
 
+.table-card {
+  overflow: hidden;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin: -6px;
+  padding: 6px;
+}
+
 .studio-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 720px;
 }
 
 .studio-table th,
@@ -247,6 +296,12 @@ pre {
   font-weight: 700;
 }
 
+.table-empty {
+  padding: 28px 18px;
+  text-align: center;
+  color: #64748b;
+}
+
 .header-actions,
 .inline-actions,
 .panel-header-row,
@@ -255,6 +310,7 @@ pre {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .panel-header-row {
@@ -381,6 +437,7 @@ textarea {
 
 textarea {
   resize: vertical;
+  min-height: 120px;
 }
 
 .field-error {
@@ -393,6 +450,9 @@ textarea {
 .ghost-button,
 .ghost-link,
 .secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 999px;
   padding: 10px 16px;
@@ -538,14 +598,19 @@ textarea {
 .banner {
   padding: 14px 18px;
   border-radius: 18px;
+  border: 1px solid transparent;
 }
 
 .banner.success {
   color: #166534;
+  background: rgba(22, 163, 74, 0.1);
+  border-color: rgba(22, 163, 74, 0.16);
 }
 
 .banner.error {
   color: #991b1b;
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.16);
 }
 
 .warning-box,
@@ -575,6 +640,34 @@ textarea {
   min-height: 180px;
 }
 
+.page-state {
+  display: grid;
+  place-items: center;
+  min-height: min(68vh, 620px);
+  padding: 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  text-align: center;
+}
+
+.page-state-warning {
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.96), rgba(255, 247, 237, 0.92));
+}
+
+.page-state-error {
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.page-state-content {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+  justify-items: center;
+}
+
 @media (max-width: 1200px) {
   .editor-shell {
     grid-template-columns: 1fr;
@@ -599,6 +692,7 @@ textarea {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+    padding: 18px 20px;
   }
 
   .topbar-actions {
@@ -617,5 +711,51 @@ textarea {
 
   .page-header {
     flex-direction: column;
+  }
+
+  .app-main {
+    padding: 20px;
+  }
+
+  .page-container {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-sidebar {
+    padding: 24px 18px;
+  }
+
+  .app-main {
+    padding: 16px;
+  }
+
+  .page-header,
+  .table-card,
+  .panel,
+  .snippet-card,
+  .banner,
+  .role-panel {
+    border-radius: 22px;
+  }
+
+  .topbar-buttons,
+  .header-actions {
+    width: 100%;
+  }
+
+  .topbar-buttons > *,
+  .header-actions > *,
+  .form-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .segmented-control.small {
+    transform: none;
+  }
+
+  .pill {
+    font-size: 0.68rem;
   }
 }

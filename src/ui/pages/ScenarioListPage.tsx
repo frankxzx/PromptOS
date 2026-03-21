@@ -8,6 +8,11 @@ export function ScenarioListPage() {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
+  const templateNameById = useMemo(
+    () => new Map(templates.map((template) => [template.id, template.name])),
+    [templates]
+  );
+
   const filteredScenarios = useMemo(
     () =>
       scenarios.filter((scenario) => {
@@ -17,13 +22,12 @@ export function ScenarioListPage() {
         if (!deferredSearch) {
           return true;
         }
-        const templateName =
-          templates.find((template) => template.id === scenario.templateId)?.name ?? "";
+        const templateName = templateNameById.get(scenario.templateId) ?? "";
         return `${scenario.name} ${scenario.description} ${templateName}`
           .toLowerCase()
           .includes(deferredSearch.toLowerCase());
       }),
-    [deferredSearch, scenarios, statusFilter, templates]
+    [deferredSearch, scenarios, statusFilter, templateNameById]
   );
 
   return (
@@ -53,7 +57,10 @@ export function ScenarioListPage() {
         </label>
         <label className="field">
           <span className="field-label">Status</span>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+          >
             <option value="all">All</option>
             <option value="draft">Draft</option>
             <option value="ready">Ready</option>
@@ -62,41 +69,49 @@ export function ScenarioListPage() {
       </section>
 
       <div className="table-card">
-        <table className="studio-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Template</th>
-              <th>Template version</th>
-              <th>Status</th>
-              <th>Bindings</th>
-              <th>Version</th>
-              <th>Last editor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredScenarios.map((scenario) => (
-              <tr key={scenario.id}>
-                <td>
-                  <Link to={`/scenarios/${scenario.id}`} className="table-link">
-                    {scenario.name}
-                  </Link>
-                  <p className="table-subcopy">{scenario.description}</p>
-                </td>
-                <td>
-                  {templates.find((template) => template.id === scenario.templateId)?.name ?? "-"}
-                </td>
-                <td>v{scenario.templateVersion}</td>
-                <td>
-                  <span className={`status-pill ${scenario.status}`}>{scenario.status}</span>
-                </td>
-                <td>{scenario.snippetBindings.length} slots</td>
-                <td>v{scenario.version}</td>
-                <td>{scenario.updatedBy}</td>
+        <div className="table-scroll">
+          <table className="studio-table" aria-label="Scenario library">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Template</th>
+                <th>Template version</th>
+                <th>Status</th>
+                <th>Bindings</th>
+                <th>Version</th>
+                <th>Last editor</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredScenarios.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="table-empty">
+                    No scenarios match the current filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredScenarios.map((scenario) => (
+                  <tr key={scenario.id}>
+                    <td>
+                      <Link to={`/scenarios/${scenario.id}`} className="table-link">
+                        {scenario.name}
+                      </Link>
+                      <p className="table-subcopy">{scenario.description}</p>
+                    </td>
+                    <td>{templateNameById.get(scenario.templateId) ?? "-"}</td>
+                    <td>v{scenario.templateVersion}</td>
+                    <td>
+                      <span className={`status-pill ${scenario.status}`}>{scenario.status}</span>
+                    </td>
+                    <td>{scenario.snippetBindings.length} slots</td>
+                    <td>v{scenario.version}</td>
+                    <td>{scenario.updatedBy}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

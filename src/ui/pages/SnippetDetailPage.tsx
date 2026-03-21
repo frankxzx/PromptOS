@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useStudio } from "../../studio/StudioContext";
 import type { SnippetStatus, SnippetType } from "../../studio/types";
+import { PageState } from "../components/PageState";
+import {
+  SNIPPET_STATUS_OPTIONS,
+  SNIPPET_TYPE_OPTIONS
+} from "../constants";
+
+type MessageState =
+  | { tone: "success" | "error"; text: string }
+  | null;
 
 export function SnippetDetailPage() {
   const { snippetId } = useParams();
@@ -21,27 +30,30 @@ export function SnippetDetailPage() {
     () => (snippet ? getScenarioUsageForSnippet(snippet.id) : []),
     [getScenarioUsageForSnippet, snippet]
   );
-  const [content, setContent] = useState(snippet?.versions.at(-1)?.content ?? "");
+  const currentVersion = snippet?.versions.at(-1);
+  const [content, setContent] = useState(currentVersion?.content ?? "");
   const [name, setName] = useState(snippet?.name ?? "");
   const [type, setType] = useState<SnippetType>(snippet?.type ?? "instruction");
   const [status, setStatus] = useState<SnippetStatus>(snippet?.status ?? "active");
   const [description, setDescription] = useState(snippet?.description ?? "");
   const [notes, setNotes] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<MessageState>(null);
 
   useEffect(() => {
-    setContent(snippet?.versions.at(-1)?.content ?? "");
+    setContent(currentVersion?.content ?? "");
     setName(snippet?.name ?? "");
     setType(snippet?.type ?? "instruction");
     setStatus(snippet?.status ?? "active");
     setDescription(snippet?.description ?? "");
-  }, [snippet]);
+  }, [currentVersion?.content, snippet]);
 
   if (!snippet) {
     return (
-      <section className="page-shell">
-        <p>Snippet not found.</p>
-      </section>
+      <PageState
+        title="Snippet not found"
+        description="The requested snippet may have been deleted or the URL is no longer valid."
+        action={{ label: "Back to library", to: "/snippets" }}
+      />
     );
   }
 
@@ -67,7 +79,10 @@ export function SnippetDetailPage() {
                 }
                 const result = deleteSnippet(snippet.id);
                 if (!result.ok) {
-                  setMessage(result.message ?? "Unable to delete snippet.");
+                  setMessage({
+                    tone: "error",
+                    text: result.message ?? "Unable to delete snippet."
+                  });
                   return;
                 }
                 navigate("/snippets");
@@ -79,7 +94,11 @@ export function SnippetDetailPage() {
         </div>
       </header>
 
-      {message ? <div className="banner success">{message}</div> : null}
+      {message ? (
+        <div className={`banner ${message.tone}`} role="status" aria-live="polite">
+          {message.text}
+        </div>
+      ) : null}
 
       <div className="detail-grid">
         <section className="panel">
@@ -92,12 +111,12 @@ export function SnippetDetailPage() {
             </div>
             <span className={`status-pill ${snippet.status}`}>{snippet.status}</span>
           </div>
-          <pre className="detail-pre">{snippet.versions.at(-1)?.content}</pre>
+          <pre className="detail-pre">{currentVersion?.content}</pre>
 
           <div className="impact-box">
             <strong>Impact analysis</strong>
             <p>
-              This snippet is referenced by {usage.length} scenario{usage.length === 1 ? "" : "s"}.
+              This snippet is referenced by {usage.length} binding{usage.length === 1 ? "" : "s"}.
             </p>
             {usage.length > 0 ? (
               <p>Most recent consumer: {usage[0].scenarioName}</p>
@@ -110,17 +129,21 @@ export function SnippetDetailPage() {
         <section className="panel">
           <h3>Scenario usage</h3>
           <div className="version-list">
-            {usage.map((item) => (
-              <article key={`${item.scenarioId}-${item.pinnedVersion}`} className="version-card">
-                <div className="panel-header-row">
-                  <Link to={`/scenarios/${item.scenarioId}`} className="table-link">
-                    {item.scenarioName}
-                  </Link>
-                  <span className="version-chip">v{item.pinnedVersion}</span>
-                </div>
-                <p className="muted-copy">{new Date(item.updatedAt).toLocaleString()}</p>
-              </article>
-            ))}
+            {usage.length === 0 ? (
+              <div className="warning-box">No scenarios currently reference this snippet.</div>
+            ) : (
+              usage.map((item) => (
+                <article key={`${item.scenarioId}-${item.pinnedVersion}`} className="version-card">
+                  <div className="panel-header-row">
+                    <Link to={`/scenarios/${item.scenarioId}`} className="table-link">
+                      {item.scenarioName}
+                    </Link>
+                    <span className="version-chip">v{item.pinnedVersion}</span>
+                  </div>
+                  <p className="muted-copy">{new Date(item.updatedAt).toLocaleString()}</p>
+                </article>
+              ))
+            )}
           </div>
         </section>
 
@@ -148,7 +171,10 @@ export function SnippetDetailPage() {
                         className="ghost-button"
                         onClick={() => {
                           restoreSnippetVersion(snippet.id, version.version);
-                          setMessage(`Snippet restored from v${version.version} as a new current version.`);
+                          setMessage({
+                            tone: "success",
+                            text: `Snippet restored from v${version.version} as a new current version.`
+                          });
                         }}
                       >
                         Restore
@@ -180,12 +206,11 @@ export function SnippetDetailPage() {
                   value={type}
                   onChange={(event) => setType(event.target.value as SnippetType)}
                 >
-                  <option value="role">Role</option>
-                  <option value="persona">Persona</option>
-                  <option value="instruction">Instruction</option>
-                  <option value="format">Format</option>
-                  <option value="safety">Safety</option>
-                  <option value="tone">Tone</option>
+                  {SNIPPET_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="field">
@@ -194,8 +219,11 @@ export function SnippetDetailPage() {
                   value={status}
                   onChange={(event) => setStatus(event.target.value as SnippetStatus)}
                 >
-                  <option value="active">Active</option>
-                  <option value="deprecated">Deprecated</option>
+                  {SNIPPET_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="field">
@@ -216,11 +244,13 @@ export function SnippetDetailPage() {
                     status,
                     description
                   });
-                  setMessage(
-                    result.ok
-                      ? "Snippet metadata updated."
-                      : result.message ?? "Unable to update snippet."
-                  );
+                  setMessage({
+                    tone: result.ok ? "success" : "error",
+                    text:
+                      result.ok
+                        ? "Snippet metadata updated."
+                        : result.message ?? "Unable to update snippet."
+                  });
                 }}
               >
                 Save metadata
@@ -245,7 +275,11 @@ export function SnippetDetailPage() {
             <>
               <label className="field">
                 <span className="field-label">Content</span>
-                <textarea rows={10} value={content} onChange={(event) => setContent(event.target.value)} />
+                <textarea
+                  rows={10}
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                />
               </label>
               <label className="field">
                 <span className="field-label">Release note</span>
@@ -256,11 +290,13 @@ export function SnippetDetailPage() {
                 className="primary-button"
                 onClick={() => {
                   const result = createSnippetVersion(snippet.id, content, notes || "Manual update.");
-                  setMessage(
-                    result.ok
-                      ? "New snippet version created."
-                      : result.message ?? "Unable to create snippet version."
-                  );
+                  setMessage({
+                    tone: result.ok ? "success" : "error",
+                    text:
+                      result.ok
+                        ? "New snippet version created."
+                        : result.message ?? "Unable to create snippet version."
+                  });
                 }}
               >
                 Publish snippet version
