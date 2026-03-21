@@ -61,6 +61,39 @@ export function ScenarioEditorPage() {
     }
     return renderEvaluationPreview(template, draft);
   }, [draft, template]);
+  const inputSchema = useMemo(
+    () => (resolvedTemplate ? getTemplateInputSchema(resolvedTemplate) : []),
+    [resolvedTemplate]
+  );
+  const snippetVariants = useMemo(
+    () =>
+      (resolvedTemplate?.variants ?? []).filter((variant) => variant.type === "snippet"),
+    [resolvedTemplate]
+  );
+  const fieldVariantsByKey = useMemo(
+    () =>
+      new Map((resolvedTemplate?.variants ?? []).map((variant) => [variant.key, variant])),
+    [resolvedTemplate]
+  );
+  const selectedPersonaCards = useMemo(
+    () =>
+      (draft?.personaBindings ?? []).map((binding, index) => {
+        const snippet = snippets.find((item) => item.id === binding.snippetId);
+        const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
+        return {
+          id: binding.id,
+          label: `Persona ${index + 1}`,
+          snippetName: snippet?.name ?? "Missing persona",
+          pinnedVersion: binding.pinnedVersion,
+          content: version?.content ?? "Persona content unavailable."
+        };
+      }),
+    [draft, snippets]
+  );
+  const resolvedPreviewBlocks = useMemo(
+    () => preview?.resolvedBlocks.filter((block) => !block.slot.startsWith("persona:")) ?? [],
+    [preview]
+  );
 
   if (!sourceScenario || !draft || !template || !resolvedTemplate || !preview || !evaluationPreview) {
     return (
@@ -75,34 +108,6 @@ export function ScenarioEditorPage() {
   const activeScenario = draft;
   const persistedScenario = sourceScenario;
   const activeTemplate: PromptTemplate = template;
-  const inputSchema = useMemo(() => getTemplateInputSchema(resolvedTemplate), [resolvedTemplate]);
-  const snippetVariants = useMemo(
-    () => resolvedTemplate.variants.filter((variant) => variant.type === "snippet"),
-    [resolvedTemplate]
-  );
-  const fieldVariantsByKey = useMemo(
-    () => new Map(resolvedTemplate.variants.map((variant) => [variant.key, variant])),
-    [resolvedTemplate]
-  );
-  const selectedPersonaCards = useMemo(
-    () =>
-      activeScenario.personaBindings.map((binding, index) => {
-        const snippet = snippets.find((item) => item.id === binding.snippetId);
-        const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
-        return {
-          id: binding.id,
-          label: `Persona ${index + 1}`,
-          snippetName: snippet?.name ?? "Missing persona",
-          pinnedVersion: binding.pinnedVersion,
-          content: version?.content ?? "Persona content unavailable."
-        };
-      }),
-    [activeScenario.personaBindings, snippets]
-  );
-  const resolvedPreviewBlocks = useMemo(
-    () => preview.resolvedBlocks.filter((block) => !block.slot.startsWith("persona:")),
-    [preview.resolvedBlocks]
-  );
 
   function updateDraft(nextScenario: Scenario) {
     setDraft(nextScenario);
