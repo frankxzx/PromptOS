@@ -189,8 +189,77 @@ export function TemplateBuilderPage() {
     }
     return resolveTemplateVersion(draft, testScenario.templateVersion);
   }, [draft, testScenario]);
+  const staticValidation = useMemo(
+    () => (draft ? validateTemplateStructure(draft, snippets) : null),
+    [draft, snippets]
+  );
+  const testPreview = useMemo(
+    () =>
+      draft && testScenario
+        ? renderScenarioPreview(draft, testScenario, snippets)
+        : null,
+    [draft, testScenario, snippets]
+  );
+  const evaluationPreview = useMemo(
+    () =>
+      draft && testScenario
+        ? renderEvaluationPreview(draft, testScenario)
+        : null,
+    [draft, testScenario]
+  );
+  const testValidation = useMemo(
+    () =>
+      draft && testScenario ? validateScenario(draft, testScenario, snippets) : null,
+    [draft, testScenario, snippets]
+  );
+  const testInputSchema = useMemo(
+    () => (resolvedTestTemplate ? getTemplateInputSchema(resolvedTestTemplate) : []),
+    [resolvedTestTemplate]
+  );
+  const fieldVariantsByKey = useMemo(
+    () =>
+      new Map(
+        (resolvedTestTemplate?.variants ?? []).map((variant) => [variant.key, variant])
+      ),
+    [resolvedTestTemplate]
+  );
+  const snippetVariants = useMemo(
+    () =>
+      (resolvedTestTemplate?.variants ?? []).filter((variant) => variant.type === "snippet"),
+    [resolvedTestTemplate]
+  );
+  const versionOptions = useMemo(() => (draft ? getVersionOptions(draft) : []), [draft]);
+  const selectedTestPersonaCards = useMemo(
+    () =>
+      (testScenario?.personaBindings ?? []).map((binding, index) => {
+        const snippet = snippets.find((item) => item.id === binding.snippetId);
+        const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
+        return {
+          id: binding.id,
+          label: `Persona ${index + 1}`,
+          snippetName: snippet?.name ?? "Missing persona",
+          pinnedVersion: binding.pinnedVersion,
+          content: version?.content ?? "Persona content unavailable."
+        };
+      }),
+    [testScenario, snippets]
+  );
+  const resolvedTestBlocks = useMemo(
+    () =>
+      testPreview?.resolvedBlocks.filter((block) => !block.slot.startsWith("persona:")) ?? [],
+    [testPreview]
+  );
 
-  if ((!isNewTemplate && !sourceTemplate) || !draft || !testScenario || !resolvedTestTemplate) {
+  if (
+    (!isNewTemplate && !sourceTemplate) ||
+    !draft ||
+    !testScenario ||
+    !resolvedTestTemplate ||
+    !staticValidation ||
+    !testPreview ||
+    !evaluationPreview ||
+    !testValidation
+  ) {
     return (
       <PageState
         title="Template not found"
@@ -203,54 +272,10 @@ export function TemplateBuilderPage() {
   const activeTemplate = draft;
   const persistedTemplate = sourceTemplate ?? activeTemplate;
   const activeTestScenario = testScenario;
-  const staticValidation = useMemo(
-    () => validateTemplateStructure(activeTemplate, snippets),
-    [activeTemplate, snippets]
-  );
-  const testPreview = useMemo(
-    () => renderScenarioPreview(activeTemplate, activeTestScenario, snippets),
-    [activeTemplate, activeTestScenario, snippets]
-  );
-  const evaluationPreview = useMemo(
-    () => renderEvaluationPreview(activeTemplate, activeTestScenario),
-    [activeTemplate, activeTestScenario]
-  );
-  const testValidation = useMemo(
-    () => validateScenario(activeTemplate, activeTestScenario, snippets),
-    [activeTemplate, activeTestScenario, snippets]
-  );
-  const testInputSchema = useMemo(
-    () => getTemplateInputSchema(resolvedTestTemplate),
-    [resolvedTestTemplate]
-  );
-  const fieldVariantsByKey = useMemo(
-    () => new Map(resolvedTestTemplate.variants.map((variant) => [variant.key, variant])),
-    [resolvedTestTemplate]
-  );
-  const snippetVariants = useMemo(
-    () => resolvedTestTemplate.variants.filter((variant) => variant.type === "snippet"),
-    [resolvedTestTemplate]
-  );
-  const versionOptions = useMemo(() => getVersionOptions(activeTemplate), [activeTemplate]);
-  const selectedTestPersonaCards = useMemo(
-    () =>
-      activeTestScenario.personaBindings.map((binding, index) => {
-        const snippet = snippets.find((item) => item.id === binding.snippetId);
-        const version = snippet?.versions.find((item) => item.version === binding.pinnedVersion);
-        return {
-          id: binding.id,
-          label: `Persona ${index + 1}`,
-          snippetName: snippet?.name ?? "Missing persona",
-          pinnedVersion: binding.pinnedVersion,
-          content: version?.content ?? "Persona content unavailable."
-        };
-      }),
-    [activeTestScenario.personaBindings, snippets]
-  );
-  const resolvedTestBlocks = useMemo(
-    () => testPreview.resolvedBlocks.filter((block) => !block.slot.startsWith("persona:")),
-    [testPreview.resolvedBlocks]
-  );
+  const activeStaticValidation = staticValidation;
+  const activeTestValidation = testValidation;
+  const activeTestPreview = testPreview;
+  const activeEvaluationPreview = evaluationPreview;
 
   function updateDraft(nextTemplate: PromptTemplate) {
     setDraft(nextTemplate);
@@ -376,7 +401,7 @@ export function TemplateBuilderPage() {
   }
 
   function save(status: "draft" | "ready") {
-    if (status === "ready" && staticValidation.errors.length > 0) {
+    if (status === "ready" && activeStaticValidation.errors.length > 0) {
       setToast({
         tone: "error",
         message: "Template has structural errors. Fix them before marking it ready."
@@ -1298,10 +1323,14 @@ export function TemplateBuilderPage() {
               </div>
               <span
                 className={`status-pill ${
-                  staticValidation.errors.length || testValidation.errors.length ? "draft" : "ready"
+                  activeStaticValidation.errors.length ||
+                  activeTestValidation.errors.length
+                    ? "draft"
+                    : "ready"
                 }`}
               >
-                {staticValidation.errors.length || testValidation.errors.length
+                {activeStaticValidation.errors.length ||
+                activeTestValidation.errors.length
                   ? "needs review"
                   : "test ok"}
               </span>
@@ -1309,15 +1338,16 @@ export function TemplateBuilderPage() {
 
             <article className="nested-card">
               <strong>Static validation</strong>
-              {staticValidation.errors.length === 0 && staticValidation.warnings.length === 0 ? (
+              {activeStaticValidation.errors.length === 0 &&
+              activeStaticValidation.warnings.length === 0 ? (
                 <p className="muted-copy">No structural issues found.</p>
               ) : null}
-              {staticValidation.errors.map((error) => (
+              {activeStaticValidation.errors.map((error) => (
                 <p key={error} className="muted-copy">
                   Error: {error}
                 </p>
               ))}
-              {staticValidation.warnings.map((warning) => (
+              {activeStaticValidation.warnings.map((warning) => (
                 <p key={warning} className="muted-copy">
                   Warning: {warning}
                 </p>
@@ -1417,7 +1447,7 @@ export function TemplateBuilderPage() {
                       id={`template-test-${item.key}`}
                       item={item}
                       value={activeTestScenario.variableValues[item.key]}
-                      missing={testPreview.missingVariables.includes(item.key)}
+                      missing={activeTestPreview.missingVariables.includes(item.key)}
                       variantType={fieldVariant?.type}
                       onChange={(value) => updateTestVariable(item.key, value)}
                     />
@@ -1580,17 +1610,17 @@ export function TemplateBuilderPage() {
               ) : null}
             </article>
 
-            {testValidation.errors.length > 0 ? (
+            {activeTestValidation.errors.length > 0 ? (
               <div className="warning-box">
-                {testValidation.errors.map((error) => (
+                {activeTestValidation.errors.map((error) => (
                   <p key={error}>{error}</p>
                 ))}
               </div>
             ) : null}
 
-            {testPreview.renderWarnings.length > 0 ? (
+            {activeTestPreview.renderWarnings.length > 0 ? (
               <div className="warning-box">
-                {testPreview.renderWarnings.map((warning) => (
+                {activeTestPreview.renderWarnings.map((warning) => (
                   <p key={warning}>{warning}</p>
                 ))}
               </div>
@@ -1628,11 +1658,11 @@ export function TemplateBuilderPage() {
 
             <article className="render-output">
               <h4>Rendered test prompt</h4>
-              <pre>{testPreview.renderedPrompt}</pre>
+              <pre>{activeTestPreview.renderedPrompt}</pre>
             </article>
             <article className="render-output">
               <h4>Rendered evaluation prompt</h4>
-              <pre>{evaluationPreview.renderedPrompt}</pre>
+              <pre>{activeEvaluationPreview.renderedPrompt}</pre>
             </article>
           </section>
         </aside>
